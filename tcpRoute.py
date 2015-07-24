@@ -5,7 +5,7 @@
 u''' TCP 路由器
 
 TCP 路由器会自动选择最快的线路转发TCP连接。
-通过 socket5 代理服务器提供服务。目前支持直连及 socket5 代理线路。
+通过 socks5 代理服务器提供服务。目前支持直连及 socks5 代理线路。
 
 具体细节：
     1.对 DNS 解析获得的多个IP同时尝试连接，最终使用最快建立的连接。
@@ -127,15 +127,15 @@ class SClient:
         # 获得请求并发出新的请求。
         (ver,) = self.unpack('B')
         if ver ==0x05:
-            # socket5 协议
-            logging.debug('Receive socket5 protocol header')
-            self.socket5Handle(ver)
+            # socks5 协议
+            logging.debug('Receive socks5 protocol header')
+            self.socks5Handle(ver)
         elif chr(ver) in 'GgPpHhDdTtCcOo':
             # 误被当作 http 代理
             logging.error('Receive http header')
-            self.httpHandle()
+            self.httpHandle(ver)
         else:
-            # 未知的类型，以 socket5 协议拒绝
+            # 未知的类型，以 socks5 协议拒绝
             logging.error('Receive an unknown protocol header')
             self.pack('BB',0x05,0xff)
 
@@ -147,7 +147,7 @@ class SClient:
         self.connected = value
 
 
-    def socket5Handle(self,head):
+    def socks5Handle(self,head):
         # 鉴定
         (nmethods,) = self.unpack('B')
         if nmethods>0:
@@ -204,6 +204,7 @@ class SClient:
             group.join()
         if not self.connected:
             self.pack('!BBBBIH', 0x05, 0x03, 0x00, 0x01, 0, port)
+        gevent.sleep(5)
         self.conn.close()
 
 
@@ -215,6 +216,8 @@ Content-Type:text/html; charset=utf-8
 
 <h1>HTTP agent is not supported</h1>
 HTTP agent is not supported。''')
+        gevent.sleep(5)
+        self.conn.close()
 
 
 
@@ -250,13 +253,13 @@ class DirectProxy():
             logging.debug('socket.create_connection err host:%s ,port:%s ,timeout:%s\r\n%s\r\n\r\n'%(addr[0],addr[1],timeout,info))
             return
         # 直连的话直接链接到服务器就可以，
-        # 如果是 socket5 代理，时间统计需要包含远端代理服务器连接到远端服务器的时间。
+        # 如果是 socks5 代理，时间统计需要包含远端代理服务器连接到远端服务器的时间。
         sClient.server.upProxyPing(self.getName(),hostname,addr[1],int(time.time()*1000)-startTime,addr[0])
         if not sClient.connected:
             # 第一个连接上的
             logging.debug('[DirectProxy] Connection hit (hostname=%s,ip=%s,port=%s,timeout=%s)'%(hostname,addr[0],addr[1],timeout))
             sClient.connected=True
-            #TODO: 按照socket5协议，这里应该返回服务器绑定的地址及端口
+            #TODO: 按照socks5协议，这里应该返回服务器绑定的地址及端口
             # http://blog.csdn.net/testcs_dn/article/details/7915505
             sClient.pack('!BBBBIH', 0x05, 0x00, 0x00, 0x01, 0, 0)
             # 第一个连接上的，执行转发
@@ -280,40 +283,43 @@ class DirectProxy():
         except:
             logging.exception('DirectProxy.__forwardData')
         finally:
-            # 这里 和 socket5Handle 会重复关闭
+            # 这里 和 socks5 Handle 会重复关闭
             logging.debug('DirectProxy.__forwardData  finally')
+            gevent.sleep(5)
             s.close()
             d.close()
 
 
     def getName(self):
         u'''代理唯一名称
-需要保证唯一性，建议使用 socket5-proxyhost:port 为代理名称。
+需要保证唯一性，建议使用 socks5-proxyhost:port 为代理名称。
 '''
         return 'direct'
 
 
 
-class Socket5Proxy():
-    u'''Socket5'''
+class Socks5Proxy():
+    u'''socks5'''
     def __init__(self,host,port):
         self.host = host
         self.port =port
 
-    def unpack(self, fmt):
+    @staticmethod
+    def unpack(s, fmt):
         length = struct.calcsize(fmt)
-        data = self.s.recv(length)
+        data = s.recv(length)
         if len(data) < length:
             raise Exception("SClient.unpack: bad formatted stream")
         return struct.unpack(fmt, data)
 
-    def pack(self, fmt, *args):
+    @staticmethod
+    def pack(s, fmt, *args):
         data = struct.pack(fmt, *args)
-        return self.s.sendall(data)
+        return s.sendall(data)
 
     def forward(self,sClient,atyp,hostname,port,timeout=socket._GLOBAL_DEFAULT_TIMEOUT,ip=None):
         u'''阻塞调用，'''
-        logging.debug('Socket5Proxy.forward(atyp=%s,hostname=%s,port=%s,timeout=%s,ip=%s)'%(atyp,hostname,port,timeout,ip))
+        logging.debug('socks5Proxy.forward(atyp=%s,hostname=%s,port=%s,timeout=%s,ip=%s)'%(atyp,hostname,port,timeout,ip))
 
         self.__forward(sClient,atyp,hostname,port,timeout)
 
@@ -324,66 +330,64 @@ class Socket5Proxy():
         except:
             #TODO: 处理下连接失败
             info = traceback.format_exc()
-            logging.error(u'[socket5] 连接代理服务器失败！ host:%s ,port:%s ,timeout:%s\r\n%s\r\n\r\n'%(self.host,self.port,timeout,info))
+            logging.error(u'[socks5] 连接代理服务器失败！ host:%s ,port:%s ,timeout:%s\r\n%s\r\n\r\n'%(self.host,self.port,timeout,info))
 
             return
 
-        logging.debug(u'[socket5]代理服务器已连接  host:%s ,port:%s ,timeout:%s'%(self.host,self.port,timeout))
+        logging.debug(u'[socks5]代理服务器已连接  host:%s ,port:%s ,timeout:%s'%(self.host,self.port,timeout))
 
-        # socket5 协议
-        self.s=s
         # 登录
-        self.pack('BBB',0x05,0x01,0x00)
+        Socks5Proxy.pack(s,'BBB',0x05,0x01,0x00)
 
         # 登录回应
-        ver,method = self.unpack('BB')
+        ver,method = Socks5Proxy.unpack(s,'BB')
         if ver != 0x05 or method != 0x00:
-            logging.error(u'[socket5]代理服务器登录失败！ host:%s ,port:%s'%(self.host,self.port))
+            logging.error(u'[socks5]代理服务器登录失败！ host:%s ,port:%s'%(self.host,self.port))
             self.s.close()
             return
-        logging.debug(u'[socket5]代理服务器登陆成功。 host:%s ,port:%s'%(self.host,self.port))
+        logging.debug(u'[socks5]代理服务器登陆成功。 host:%s ,port:%s'%(self.host,self.port))
 
         # 请求连接
-        self.pack('!BBBB',0x05,0x01,0x00,atyp)
+        Socks5Proxy.pack(s,'!BBBB',0x05,0x01,0x00,atyp)
         if atyp == 0x01:
             #ipv4
-            self.pack('!IH',socket.inet_aton(hostname),port)
+            Socks5Proxy.pack(s,'!IH',socket.inet_aton(hostname),port)
         elif atyp == 0x03:
             # 域名
-            self.pack('!B%ssH'%len(hostname),len(hostname),hostname,port)
+            Socks5Proxy.pack(s,'!B%ssH'%len(hostname),len(hostname),hostname,port)
         elif atyp == 0x04:
             # ipv6
             _str = socket.inet_pton(socket.AF_INET6, hostname)
             a, b = struct.unpack('!2Q', _str)
-            self.pack('!2QH',a,b,port)
+            Socks5Proxy.pack(s,'!2QH',a,b,port)
         else:
-            logging.error(u'[socket5]代理服务器绑定地址类型未知！ atyp:%s'%atyp)
+            logging.error(u'[socks5]代理服务器绑定地址类型未知！ atyp:%s'%atyp)
             self.s.close()
             return
 
         # 请求回应
-        ver,rep,rsv,atyp = self.unpack('BBBB')
+        ver,rep,rsv,atyp = Socks5Proxy.unpack(s,'BBBB')
         if ver != 0x05 or rep != 0x00:
-            logging.error(u'[socket5]代理服务器无法连接目标网站！ ver:%s ,rep:%s'%(ver,rep))
+            logging.error(u'[socks5]代理服务器无法连接目标网站！ ver:%s ,rep:%s'%(ver,rep))
             self.s.close()
             return
 
         if atyp == 0x01:
-            self.unpack('!IH')
+            Socks5Proxy.unpack(s,'!IH')
         elif atyp == 0x03:
-            length = self.unpack('B')
-            self.unpack('%ssH'%length)
+            length = Socks5Proxy.unpack(s,'B')
+            Socks5Proxy.unpack(s,'%ssH'%length)
         elif atyp == 0x04:
-            self.unpack('!2QH')
+            Socks5Proxy.unpack(s,'!2QH')
 
         # 直连的话连接建立就可以了
-        # 如果是 socket5 代理，时间统计需要包含远端代理服务器连接到远端服务器的时间。
+        # 如果是 socks5 代理，时间统计需要包含远端代理服务器连接到远端服务器的时间。
         sClient.server.upProxyPing(self.getName(),hostname,port,int(time.time()*1000)-startTime,None)
         if not sClient.connected:
             # 第一个连接上的
-            logging.debug('[socket5Proxy] Connection hit (%s,%s,%s,%s)'%(hostname,atyp,port,timeout))
+            logging.debug('[socks5Proxy] Connection hit (%s,%s,%s,%s)'%(hostname,atyp,port,timeout))
             sClient.connected=True
-            #TODO: 按照socket5协议，这里应该返回服务器绑定的地址及端口
+            #TODO: 按照socks5协议，这里应该返回服务器绑定的地址及端口
             # http://blog.csdn.net/testcs_dn/article/details/7915505
             sClient.pack('!BBBBIH', 0x05, 0x00, 0x00, 0x01, 0, 0)
             # 第一个连接上的，执行转发
@@ -394,7 +398,7 @@ class Socket5Proxy():
         else:
             # 不是第一个连接上的
             s.close()
-            logging.debug('[socket5Proxy] Connection miss (%s,%s,%s,%s)'%(hostname,atyp,port,timeout))
+            logging.debug('[socks5Proxy] Connection miss (%s,%s,%s,%s)'%(hostname,atyp,port,timeout))
 
     def __forwardData(self,s,d):
         try:
@@ -403,20 +407,21 @@ class Socket5Proxy():
                 if not data:
                     break
                 d.sendall(data)
-        except:
-            logging.exception('socket5Proxy.__forwardData')
+        except Exception as e :
+            logging.exception('socks5Proxy.__forwardData')
         finally:
-            # 这里 和 socket5Handle 会重复关闭
-            logging.debug('socket5Proxy.__forwardData close()')
+            # 这里 和 socks5Handle 会重复关闭
+            logging.debug('socks5Proxy.__forwardData close()')
+            gevent.sleep(5)
             s.close()
             d.close()
 
 
     def getName(self):
         u'''代理唯一名称
-需要保证唯一性，建议使用 socket5-proxyhost:port 为代理名称。
+需要保证唯一性，建议使用 socks5-proxyhost:port 为代理名称。
 '''
-        return 'socket5-%s:%s'%(self.host,self.port)
+        return 'socks5-%s:%s'%(self.host,self.port)
 
 
 class SocksServer(StreamServer):
@@ -494,8 +499,8 @@ class SocksServer(StreamServer):
             with open(os.path.join(basedir,"config.json"),'rb') as f:
                 config = json.load(f,encoding="utf-8")
             for proxy in config['proxyList']:
-                if proxy['type'] == 'socket5':
-                    server.addProxy(Socket5Proxy(proxy['host'],proxy['port']))
+                if proxy['type'] == 'socks5':
+                    server.addProxy(Socks5Proxy(proxy['host'],proxy['port']))
                 else:
                     logging.error(u'[config] 未知的代理类型。type=%s'%proxy['type'])
         except:

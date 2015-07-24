@@ -1,7 +1,7 @@
 {
   "proxyList":[
     {
-      "type":"socket5",
+      "type":"socks5",
       "host":"127.0.0.1",
       "port":5555
     }
