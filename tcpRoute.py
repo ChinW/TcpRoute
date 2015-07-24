@@ -57,23 +57,23 @@ if not socket.__dict__.has_key("inet_pton"):
     from win_inet_pton import inet_pton
     socket.inet_pton = inet_pton
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 basedir = os.path.dirname(os.path.abspath(__file__))
 
 
 getaddrinfoLock = threading.Lock()
 def getaddrinfo(hostname,port):
-    global gfwIP
+    global errIP
     try:
         for i in range(5):
             res = socket.getaddrinfo(hostname, port,0,socket.SOCK_STREAM,socket.IPPROTO_TCP)
             with getaddrinfoLock:
                 for r in res:
-                    if not gfwIP.has_key(r[4][0]):
+                    if not errIP.has_key(r[4][0]):
                         return res
                     else:
-                        logging.info('[DNS]%s(%s) ip in gfwIP !'%(hostname,r[4][0]))
+                        logging.info('[DNS]%s(%s) ip is errIP !'%(hostname,r[4][0]))
                         break
     except socket.gaierror as e:
         pass
@@ -85,19 +85,33 @@ def getAddrinfoLoop():
     except:
         return
     while True:
-        logging.info('gfwIP loop start')
-        _gfwIP = {}
+        logging.info('errIP loop start')
+        global errIP
+        _errIP = {}
+
+        for i in range(5):
+            res=[]
+            try:
+                res = socket.getaddrinfo('asgdgksjiyrsdfgvsydsaunsbfyiobsnalnalnv%s.com'%i, port,0,socket.SOCK_STREAM,socket.IPPROTO_TCP)
+            except:
+                pass
+            for r in res:
+                 _errIP[r[4][0]] = int(time.time()*1000)
+            time.sleep(0.3)
+        with getaddrinfoLock:
+             errIP=_errIP.copy()
+        logging.info('errIP-1:\r\n' + '\r\n'.join(errIP))
+
         m = dns.resolver.Resolver()
         m.nameservers=['8.8.8.123',]
         for i in range(100):
             for a in m.query('twitter.com').response.answer:
                 for r in a:
-                    _gfwIP[r.address]=int(time.time()*1000)
+                    _errIP[r.address]=int(time.time()*1000)
             time.sleep(0.1)
         with getaddrinfoLock:
-             global gfwIP
-             gfwIP=_gfwIP
-        logging.info('gfwIP:\r\n' + '\r\n'.join(gfwIP))
+             errIP=_errIP.copy()
+        logging.info('errIP-all:\r\n' + '\r\n'.join(errIP))
 
         time.sleep(1*60*60)
 
@@ -519,8 +533,8 @@ class SocksServer(StreamServer):
 
     @staticmethod
     def start_server(port):
-        global gfwIP
-        gfwIP = {}
+        global errIP
+        errIP = {}
 
         threading.Thread(target=getAddrinfoLoop).start()
 
