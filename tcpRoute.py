@@ -233,8 +233,8 @@ class SClient:
         self.conn.sendall('''HTTP/1.1 200 OK
 Content-Type:text/html; charset=utf-8
 
-<h1>HTTP agent is not supported</h1>
-HTTP agent is not supported。''')
+<h1>http proxy is not supported</h1>
+http proxy is not supported, Only support socks5.''')
         gevent.sleep(5)
         self.conn.close()
 
