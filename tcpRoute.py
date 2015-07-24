@@ -17,6 +17,7 @@ import os
 import sys
 import struct
 import signal
+import threading
 import time
 import logging
 import traceback
@@ -31,6 +32,11 @@ except:
     print >>sys.stderr, "please install gevent first!"
     sys.exit(1)
 
+try:
+    import dns.resolver
+except:
+    print >>sys.stderr, 'please install dnspython !'
+
 # 悲剧，windows python 3.4 才支持 ipv6 的 inet_ntop
 # https://bugs.python.org/issue7171
 if not socket.__dict__.has_key('inet_ntop'):
@@ -42,6 +48,46 @@ if not socket.__dict__.has_key("inet_pton"):
 
 logging.basicConfig(level=logging.DEBUG)
 basedir = os.path.abspath(os.path.dirname(__file__))
+
+
+getaddrinfoLock = threading.Lock()
+def getaddrinfo(hostname,port):
+    global gfwIP
+    try:
+        for i in range(5):
+            res = socket.getaddrinfo(hostname, port,0,socket.SOCK_STREAM,socket.IPPROTO_TCP)
+            with getaddrinfoLock:
+                for r in res:
+                    if not gfwIP.has_key(r[4][0]):
+                        return res
+                    else:
+                        logging.info('[DNS]%s(%s) ip in gfwIP !'%(hostname,r[4][0]))
+                        break
+    except socket.gaierror as e:
+        pass
+    return []
+
+def getAddrinfoLoop():
+    try:
+        import dns.resolver
+    except:
+        return
+    while True:
+        logging.info('gfwIP loop start')
+        _gfwIP = {}
+        m = dns.resolver.Resolver()
+        m.nameservers=['8.8.8.123',]
+        for i in range(100):
+            for a in m.query('twitter.com').response.answer:
+                for r in a:
+                    _gfwIP[r.address]=int(time.time()*1000)
+            time.sleep(0.1)
+        with getaddrinfoLock:
+             global gfwIP
+             gfwIP=_gfwIP
+        logging.info('gfwIP:\r\n' + '\r\n'.join(gfwIP))
+
+        time.sleep(1*60*60)
 
 
 # 源客户端
@@ -161,21 +207,9 @@ HTTP agent is not supported。''')
 
 
 
-# 代理累
-class ProxyBase:
-    u'''代理基础类'''
 
 
-
-def getaddrinfo(hostname,port):
-    # TODO： 需要过滤dns污染
-    try:
-        res = socket.getaddrinfo(hostname, port,0,socket.SOCK_STREAM,socket.IPPROTO_TCP)
-    except socket.gaierror as e:
-        return []
-    return res
-
-class DirectProxy(ProxyBase):
+class DirectProxy():
     u'''直接连接'''
     def forward(self,sClient,atyp,hostname,port,timeout=socket._GLOBAL_DEFAULT_TIMEOUT,ip=None):
         u'''阻塞调用，'''
@@ -247,7 +281,7 @@ class DirectProxy(ProxyBase):
 
 
 
-class Socket5Proxy(ProxyBase):
+class Socket5Proxy():
     u'''Socket5'''
     def __init__(self,host,port):
         self.host = host
@@ -419,7 +453,6 @@ class SocksServer(StreamServer):
                                 'hitIp':ip
                             }
 
-
     def handle(self, sock, addr):
         logging.debug('connection from %s:%s' % addr)
 
@@ -436,6 +469,10 @@ class SocksServer(StreamServer):
 
     @staticmethod
     def start_server(port):
+        global gfwIP
+        gfwIP = {}
+
+        threading.Thread(target=getAddrinfoLoop).start()
 
         server = SocksServer(('0.0.0.0', port))
         server.addProxy(Socket5Proxy('127.0.0.1',5555))
