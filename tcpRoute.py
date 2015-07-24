@@ -160,7 +160,9 @@ class SClient:
         ver,cmd,rsv,atyp = self.unpack('BBBB')
 
         if ver != 0x05 or cmd != 0x01:
+            logging.error(u'[SClient]收到未知类型的请求，关闭连接。 ver=%s ,cmd=%s'%(ver,cmd))
             self.pack('BBBBIH',0x05, 0x07, 0x00, 0x01, 0, 0)
+            gevent.sleep(3)
             self.conn.close()
             return
 
@@ -177,10 +179,12 @@ class SClient:
             ipv61 ,ipv62,port = self.unpack('!2QH')
             hostname = socket.inet_ntop(socket.AF_INET6, struct.pack('!2Q', ipv61, ipv62))
         else:
+            logging.error(u'[SClient]收到未知的目的地址类型，关闭连接。 atyp=%s '%(atyp))
             self.pack('!BBBBIH', 0x05, 0x07, 0x00, 0x01, 0, 0)
+            gevent.sleep(3)
             self.conn.close()
             return
-        logging.debug('[Request] host:%s   prot:%s'%(hostname,port))
+        logging.debug('[SClient] host:%s   prot:%s'%(hostname,port))
 
         # 对外发起请求
 
@@ -200,9 +204,10 @@ class SClient:
             for proxy in self.server.getProxy():
                 # 启动多个代理进行转发尝试
                 # 最先成功的会执行转发，之后成功的会自动退出。
-                group.add(gevent.spawn(proxy.forward,self,atyp,hostname,port,10))
+                group.add(gevent.spawn(proxy.forward,self,atyp,hostname,port,30))
             group.join()
         if not self.connected:
+            logging.info(u'[SClient]无法连接到目的主机，关闭连接。 hostname=%s ，port=%s '%(hostname,port))
             self.pack('!BBBBIH', 0x05, 0x03, 0x00, 0x01, 0, port)
         gevent.sleep(5)
         self.conn.close()
@@ -233,24 +238,27 @@ class DirectProxy():
         logging.debug('[DNS]resolution name:%s\r\n'%hostname+'\r\n'.join([('IP:%s'%addrin[4][0]) for addrin in addrinfoList]))
         group = Group()
         if ip in [addrin[4][0] for addrin in addrinfoList]:
-            group.add(gevent.spawn(self.__forward,sClient,ip,port,hostname,timeout))
+            group.add(gevent.spawn(self.__forward,sClient,(ip,port),hostname,timeout))
             logging.debug('cache ip hit Domain=%s ip=%s '%(hostname,ip))
         else:
             for addrinfo in addrinfoList:
                 # 启动多个代理进行转发尝试
                 # 最先成功的会执行转发，之后成功的会自动退出。
-                group.add(gevent.spawn(self.__forward,sClient,addrinfo[0],addrinfo[4],hostname,timeout))
+                group.add(gevent.spawn(self.__forward,sClient,addrinfo[4],hostname,timeout))
         group.join()
 
-    def __forward(self,sClient,atyp,addr,hostname,timeout=socket._GLOBAL_DEFAULT_TIMEOUT):
-        logging.debug('DirectProxy.__forward(hostname=%s,ip=%s,port=%s,timeout=%s)'%(hostname,addr[0],addr[1],timeout))
+    def __forward(self,sClient,addr,hostname,timeout=socket._GLOBAL_DEFAULT_TIMEOUT):
+        ip = addr[0]
+        port = addr[1]
+        logging.debug('DirectProxy.__forward(hostname=%s,ip=%s,port=%s,timeout=%s)'%(hostname,ip,port,timeout))
         startTime = int(time.time()*1000)
         try:
             s = socket.create_connection(addr,timeout)
         except:
             #TODO: 处理下连接失败
             info = traceback.format_exc()
-            logging.debug('socket.create_connection err host:%s ,port:%s ,timeout:%s\r\n%s\r\n\r\n'%(addr[0],addr[1],timeout,info))
+            logging.debug(u'[DirectProxy]直连失败。 hostname:%s ,ip:%s ,port:%s ,timeout:%s'%(hostname,addr[0],addr[1],timeout))
+            logging.debug('%s\r\n\r\n'%info)
             return
         # 直连的话直接链接到服务器就可以，
         # 如果是 socks5 代理，时间统计需要包含远端代理服务器连接到远端服务器的时间。
@@ -259,9 +267,16 @@ class DirectProxy():
             # 第一个连接上的
             logging.debug('[DirectProxy] Connection hit (hostname=%s,ip=%s,port=%s,timeout=%s)'%(hostname,addr[0],addr[1],timeout))
             sClient.connected=True
+
+            # 为了应付长连接推送，超时设置的长点。
+            s.settimeout(10*60)
+            sClient.conn.settimeout(10*60)
+
             #TODO: 按照socks5协议，这里应该返回服务器绑定的地址及端口
             # http://blog.csdn.net/testcs_dn/article/details/7915505
             sClient.pack('!BBBBIH', 0x05, 0x00, 0x00, 0x01, 0, 0)
+
+
             # 第一个连接上的，执行转发
             group = Group()
             group.add(gevent.spawn(self.__forwardData,sClient.conn,s))
@@ -280,8 +295,12 @@ class DirectProxy():
                 if not data:
                     break
                 d.sendall(data)
-        except:
-            logging.exception('DirectProxy.__forwardData')
+        except Exception as e :
+            if e.errno == 9:
+                # 另一个协程关闭了链接。
+                pass
+            else:
+                logging.exception('DirectProxy.__forwardData')
         finally:
             # 这里 和 socks5 Handle 会重复关闭
             logging.debug('DirectProxy.__forwardData  finally')
@@ -330,7 +349,8 @@ class Socks5Proxy():
         except:
             #TODO: 处理下连接失败
             info = traceback.format_exc()
-            logging.error(u'[socks5] 连接代理服务器失败！ host:%s ,port:%s ,timeout:%s\r\n%s\r\n\r\n'%(self.host,self.port,timeout,info))
+            logging.error(u'[socks5] 连接代理服务器失败！ host:%s ,port:%s ,timeout:%s'%(self.host,self.port,timeout,))
+            logging.error('%s\r\n\r\n'%info)
 
             return
 
@@ -343,7 +363,7 @@ class Socks5Proxy():
         ver,method = Socks5Proxy.unpack(s,'BB')
         if ver != 0x05 or method != 0x00:
             logging.error(u'[socks5]代理服务器登录失败！ host:%s ,port:%s'%(self.host,self.port))
-            self.s.close()
+            s.close()
             return
         logging.debug(u'[socks5]代理服务器登陆成功。 host:%s ,port:%s'%(self.host,self.port))
 
@@ -362,14 +382,14 @@ class Socks5Proxy():
             Socks5Proxy.pack(s,'!2QH',a,b,port)
         else:
             logging.error(u'[socks5]代理服务器绑定地址类型未知！ atyp:%s'%atyp)
-            self.s.close()
+            s.close()
             return
 
         # 请求回应
         ver,rep,rsv,atyp = Socks5Proxy.unpack(s,'BBBB')
         if ver != 0x05 or rep != 0x00:
             logging.error(u'[socks5]代理服务器无法连接目标网站！ ver:%s ,rep:%s'%(ver,rep))
-            self.s.close()
+            s.close()
             return
 
         if atyp == 0x01:
@@ -386,7 +406,13 @@ class Socks5Proxy():
         if not sClient.connected:
             # 第一个连接上的
             logging.debug('[socks5Proxy] Connection hit (%s,%s,%s,%s)'%(hostname,atyp,port,timeout))
+
             sClient.connected=True
+
+            # 为了应付长连接推送，超时设置的长点。
+            s.settimeout(10*60)
+            sClient.conn.settimeout(10*60)
+
             #TODO: 按照socks5协议，这里应该返回服务器绑定的地址及端口
             # http://blog.csdn.net/testcs_dn/article/details/7915505
             sClient.pack('!BBBBIH', 0x05, 0x00, 0x00, 0x01, 0, 0)
@@ -408,7 +434,11 @@ class Socks5Proxy():
                     break
                 d.sendall(data)
         except Exception as e :
-            logging.exception('socks5Proxy.__forwardData')
+            if e.errno ==9:
+                # 另一个协程关闭了链接。
+                pass
+            else:
+                logging.exception('socks5Proxy.__forwardData')
         finally:
             # 这里 和 socks5Handle 会重复关闭
             logging.debug('socks5Proxy.__forwardData close()')
