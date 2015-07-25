@@ -616,7 +616,7 @@ class SocksServer(StreamServer):
             proxyDict = { }
             self.__setProxyCache(hostname,port,proxyDict)
 
-        proxyDict[proxyName]={
+        proxyDict['%s-%s'%(proxyName,ip)]={
                                 'tcpping':ping,
                                 'proxyName':proxyName,
                                 'hitIp':ip
