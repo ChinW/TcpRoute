@@ -26,6 +26,7 @@ import time
 import logging
 import json
 import traceback
+import math
 from LRUCacheDict import LRUCacheDict
 
 try:
@@ -143,6 +144,7 @@ def dnsQueryLoop():
     while True:
         global  errIPLock
         global  errIP
+        global  configIpBlacklist
         _errIP ={}
 
         for ip in configIpBlacklist:
@@ -274,10 +276,20 @@ class SClient:
             proxyList = sorted(proxyDict.values(),key=lambda x:x['tcpping'])
             proxyName = proxyList[0]['proxyName']
             hitIp = proxyList[0]['hitIp']
+            tcpping = proxyList[0]['tcpping']
+            _tcpping =tcpping
+            if _tcpping<=500:
+                _tcpping=1000
+            elif _tcpping<=3000:
+                _tcpping+=1000
+            else:
+                _tcpping += _tcpping/2.0
+            timeout = int(math.ceil(_tcpping/1000.0))
+
             proxy = self.server.getProxy(proxyName)
             if proxy:
-                logging.debug('[Cache] hit host:%s ,prot:%s ,proxy:%s ,ip:%s'%(hostname,port,proxy.getName(),hitIp))
-                proxy.forward(self,atyp,hostname,port,3,hitIp)
+                logging.debug('[Cache] hit host:%s ,prot:%s ,proxy:%s ,ip:%s,tcpping:%s,timeout:%s'%(hostname,port,proxy.getName(),hitIp,tcpping,timeout))
+                proxy.forward(self,atyp,hostname,port,timeout,hitIp)
         if not self.connected:
             # 不管是没有缓存记录还是没连接上，都使用全部链接做一次测试。
             logging.debug('[all proxt]  host:%s ,prot:%s '%(hostname,port))
