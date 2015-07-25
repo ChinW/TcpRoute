@@ -13,9 +13,9 @@ TCP 路由器会自动选择最快的线路转发TCP连接。
     3.缓存10分钟上次检测到的最快线路方便以后使用。
     4.不使用异常的dns解析结果。
 
+感谢 https://github.com/felix021/ssocks5/blob/master/msocks5.py
 '''
 
-# 感谢 https://github.com/felix021/ssocks5/blob/master/msocks5.py
 
 import os
 import sys
@@ -37,7 +37,6 @@ except:
     print >>sys.stderr, "please install gevent first!"
     sys.exit(1)
 
-
 try:
     import dns.resolver
     import dns.rdtypes.IN.A
@@ -46,7 +45,6 @@ try:
 except:
     print >>sys.stderr, 'please install dnspython !'
     sys.exit(1)
-
 
 # 悲剧，windows python 3.4 才支持 ipv6 的 inet_ntop
 # https://bugs.python.org/issue7171
@@ -58,10 +56,9 @@ if not socket.__dict__.has_key("inet_pton"):
     socket.inet_pton = inet_pton
 
 logging.basicConfig(level=logging.DEBUG)
-
 basedir = os.path.dirname(os.path.abspath(__file__))
 
-
+configIpBlacklist = []
 errIP={}
 errIPLock = threading.Lock()
 nameservers = 'local'
@@ -148,6 +145,13 @@ def dnsQueryLoop():
         global  errIP
         _errIP ={}
 
+        for ip in configIpBlacklist:
+            _errIP[ip]=-1
+
+        with errIPLock:
+            if not errIP:
+                errIP.update(_errIP)
+
         logging.info(u'[DNS]开始采集异常解析IP...')
 
         for i in range(5):
@@ -158,11 +162,11 @@ def dnsQueryLoop():
             gevent.sleep(0.1)
 
         with errIPLock:
-            if not errIP:
+            if len(errIP) == len(configIpBlacklist):
                 errIP.update(_errIP)
 
         for i in range(100):
-            ipList = _dnsQuery('twitter.com',['8.8.8.234'])
+            ipList = _dnsQuery('twitter.com',['8.8.8.234','8.8.8.123',])
             for ip in ipList:
                 logging.debug(u'[DNS]采集到远程异常IP(%s)。'%ip)
                 _errIP[ip] = int(time.time()*1000)
@@ -334,15 +338,15 @@ class DirectProxy():
         except:
             #TODO: 处理下连接失败
             info = traceback.format_exc()
-            logging.debug(u'[DirectProxy]直连失败。 hostname:%s ,ip:%s ,port:%s ,timeout:%s'%(hostname,addr[0],addr[1],timeout))
+            logging.debug(u'[DirectProxy]直连失败。 hostname:%s ,ip:%s ,port:%s ,timeout:%s'%(hostname,ip,port,timeout))
             logging.debug('%s\r\n\r\n'%info)
             return
         # 直连的话直接链接到服务器就可以，
         # 如果是 socks5 代理，时间统计需要包含远端代理服务器连接到远端服务器的时间。
-        sClient.server.upProxyPing(self.getName(),hostname,addr[1],int(time.time()*1000)-startTime,addr[0])
+        sClient.server.upProxyPing(self.getName(),hostname,addr[1],int(time.time()*1000)-startTime,ip)
         if not sClient.connected:
             # 第一个连接上的
-            logging.debug('[DirectProxy] Connection hit (hostname=%s,ip=%s,port=%s,timeout=%s)'%(hostname,addr[0],addr[1],timeout))
+            logging.debug('[DirectProxy] Connection hit (hostname=%s,ip=%s,port=%s,timeout=%s)'%(hostname,ip,port,timeout))
             sClient.connected=True
 
             # 为了应付长连接推送，超时设置的长点。
@@ -362,7 +366,7 @@ class DirectProxy():
         else:
             # 不是第一个连接上的
             s.close()
-            logging.debug('[DirectProxy] Connection miss (hostname=%s,ip=%s,port=%s,timeout=%s)'%(hostname,addr[0],addr[1],timeout))
+            logging.debug('[DirectProxy] Connection miss (hostname=%s,ip=%s,port=%s,timeout=%s)'%(hostname,ip,port,timeout))
 
 
     def __forwardData(self,s,d):
@@ -595,9 +599,10 @@ class SocksServer(StreamServer):
         sys.exit(0)
 
     @staticmethod
-    def start_server(port):
+    def start_server():
         global nameservers
         global nameserversBackup
+        global configIpBlacklist
 
         t = threading.Thread(target=dnsQueryLoop)
         t.daemon = True
@@ -608,6 +613,11 @@ class SocksServer(StreamServer):
                 config = json.load(f,encoding="utf-8")
             port = config['port']
             server = SocksServer(('0.0.0.0', port))
+
+            configIpBlacklist = config.get('IpBlacklist',[])
+            if not configIpBlacklist:
+                logging.info(u'[config]不存在静态配置ip黑名单。')
+
 
             try:
                 nameservers = config['nameservers']
@@ -636,8 +646,4 @@ class SocksServer(StreamServer):
 
 
 if __name__ == '__main__':
-    import sys
-    port = 7070
-    if len(sys.argv) > 1:
-        port = int(sys.argv[1])
-    SocksServer.start_server(port)
+    SocksServer.start_server()
