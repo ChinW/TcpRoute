@@ -430,12 +430,12 @@ class Socks5Proxy():
         except:
             #TODO: 处理下连接失败
             info = traceback.format_exc()
-            logging.warn(u'[socks5] 连接代理服务器失败！ host:%s ,port:%s ,timeout:%s'%(self.host,self.port,timeout,))
+            logging.warn(u'[socks5] 远程代理服务器连接失败！ host:%s ,port:%s ,timeout:%s'%(self.host,self.port,timeout,))
             logging.warn('%s\r\n\r\n'%info)
 
             return
 
-        logging.debug(u'[socks5]代理服务器已连接  host:%s ,port:%s ,timeout:%s'%(self.host,self.port,timeout))
+        logging.debug(u'[socks5] 远程代理服务器已连接  host:%s ,port:%s ,timeout:%s'%(self.host,self.port,timeout))
 
         # 登录
         Socks5Proxy.pack(s,'BBB',0x05,0x01,0x00)
@@ -443,10 +443,10 @@ class Socks5Proxy():
         # 登录回应
         ver,method = Socks5Proxy.unpack(s,'BB')
         if ver != 0x05 or method != 0x00:
-            logging.error(u'[socks5]代理服务器登录失败！ host:%s ,port:%s'%(self.host,self.port))
+            logging.error(u'[socks5] 远程代理服务器登录失败！ host:%s ,port:%s'%(self.host,self.port))
             s.close()
             return
-        logging.debug(u'[socks5]代理服务器登陆成功。 host:%s ,port:%s'%(self.host,self.port))
+        logging.debug(u'[socks5] 远程代理服务器登陆成功。 host:%s ,port:%s'%(self.host,self.port))
 
         # 请求连接
         Socks5Proxy.pack(s,'!BBBB',0x05,0x01,0x00,atyp)
@@ -462,14 +462,14 @@ class Socks5Proxy():
             a, b = struct.unpack('!2Q', _str)
             Socks5Proxy.pack(s,'!2QH',a,b,port)
         else:
-            logging.warn(u'[socks5]代理服务器绑定地址类型未知！ atyp:%s'%atyp)
+            logging.warn(u'[socks5] 远程代理服务器绑定地址类型未知！ atyp:%s'%atyp)
             s.close()
             return
 
         # 请求回应
         ver,rep,rsv,atyp = Socks5Proxy.unpack(s,'BBBB')
         if ver != 0x05 or rep != 0x00:
-            logging.warn(u'[socks5]代理服务器无法连接目标网站！ ver:%s ,rep:%s'%(ver,rep))
+            logging.warn(u'[socks5] 远程代理服务器无法连接目标网站！ ver:%s ,rep:%s'%(ver,rep))
             s.close()
             return
 
