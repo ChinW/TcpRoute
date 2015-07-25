@@ -105,6 +105,8 @@ def _dnsQuery(hostname,serveListr='system',tcp=False):
     u'''纯粹的查询，并没有过滤之类的功能
 
 server:
+    'system'
+    '8.8.8.8'
     ['8.8.8.8','8.8.4.4']
 返回值
     ['1.1.1.1','2.2.2.2']
@@ -138,8 +140,6 @@ server:
             logging.debug('%s\r\n\r\n'%info)
             return []
 
-
-
 def dnsQueryLoop():
     while True:
         global  errIPLock
@@ -156,12 +156,26 @@ def dnsQueryLoop():
 
         logging.info(u'[DNS]开始采集异常解析IP...')
 
+        # 统计所有的 DNS 服务器
+        allDnsServer = set()
+
+        if isinstance(nameservers,(str,unicode)):
+            allDnsServer.add(nameservers)
+        else:
+            allDnsServer.update(nameservers)
+
+        if isinstance(nameserversBackup,(str,unicode)):
+            allDnsServer.add(nameserversBackup)
+        else:
+            allDnsServer.update(nameserversBackup)
+
         for i in range(5):
-            ipList = _dnsQuery("sdfagdfkjvgsbyeastkisbtgvbgkjscabgfaklrv%s.com"%i,nameservers)
-            for ip in ipList:
-                logging.debug(u'[DNS]采集到本地异常IP(%s)。'%ip)
-                _errIP[ip] = int(time.time()*1000)
-            gevent.sleep(0.1)
+            for dnsServer in allDnsServer:
+                ipList = _dnsQuery("sdfagdfkjvgsbyeastkisbtgvbgkjscabgfaklrv%s.com"%i,dnsServer)
+                for ip in ipList:
+                    logging.debug(u'[DNS]采集到域名服务器(%s)域名纠错IP(%s)。' % (dnsServer,ip))
+                    _errIP[ip] = int(time.time()*1000)
+                gevent.sleep(0.2)
 
         with errIPLock:
             if len(errIP) == len(configIpBlacklist):
@@ -172,7 +186,11 @@ def dnsQueryLoop():
             for ip in ipList:
                 logging.debug(u'[DNS]采集到远程异常IP(%s)。'%ip)
                 _errIP[ip] = int(time.time()*1000)
-            gevent.sleep(0.1)
+            if i%10 == 0:
+                with errIPLock:
+                    errIP.clear()
+                    errIP.update(_errIP)
+            gevent.sleep(1)
 
         with errIPLock:
             errIP.clear()
@@ -616,10 +634,6 @@ class SocksServer(StreamServer):
         global nameserversBackup
         global configIpBlacklist
 
-        t = threading.Thread(target=dnsQueryLoop)
-        t.daemon = True
-        t.start()
-
         try:
             with open(os.path.join(basedir,"config.json"),'rb') as f:
                 config = json.load(f,encoding="utf-8")
@@ -634,6 +648,13 @@ class SocksServer(StreamServer):
             try:
                 nameservers = config['nameservers']
                 nameserversBackup = config['nameserversBackup']
+
+                if  nameservers != 'system'and isinstance(nameservers,(str,unicode)):
+                    nameservers = [nameservers,]
+
+                if  nameserversBackup != 'system'and isinstance(nameserversBackup,(str,unicode)):
+                    nameserversBackup = [nameserversBackup,]
+
             except:
                 logging.exception(u'[DNS]DNS服务器配置错误！')
 
@@ -645,6 +666,10 @@ class SocksServer(StreamServer):
         except:
             logging.exception('[config]配置错误！。')
             return
+
+        t = threading.Thread(target=dnsQueryLoop)
+        t.daemon = True
+        t.start()
 
         gevent.signal(signal.SIGTERM, server.close)
         gevent.signal(signal.SIGINT, server.close)
