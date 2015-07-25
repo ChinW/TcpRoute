@@ -61,7 +61,7 @@ basedir = os.path.dirname(os.path.abspath(__file__))
 configIpBlacklist = []
 errIP={}
 errIPLock = threading.Lock()
-nameservers = 'local'
+nameservers = 'system'
 nameserversBackup = ['8.8.8.8','208.67.222.222']
 
 def dnsQuery(hostname):
@@ -100,7 +100,7 @@ def dnsQuery(hostname):
 
     return ipList
 
-def _dnsQuery(hostname,serveListr='local',tcp=False):
+def _dnsQuery(hostname,serveListr='system',tcp=False):
     u'''纯粹的查询，并没有过滤之类的功能
 
 server:
@@ -108,7 +108,7 @@ server:
 返回值
     ['1.1.1.1','2.2.2.2']
     '''
-    if serveListr == 'local':
+    if serveListr == 'system':
         try:
             res = socket.getaddrinfo(hostname, 80,0,socket.SOCK_STREAM,socket.IPPROTO_TCP)
             return [r[4][0] for r in res]
