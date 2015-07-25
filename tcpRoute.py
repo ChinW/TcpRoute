@@ -50,9 +50,11 @@ except:
 # 悲剧，windows python 3.4 才支持 ipv6 的 inet_ntop
 # https://bugs.python.org/issue7171
 if not hasattr(socket, 'inet_ntop'):
-    socket.inet_ntop = __import__('win_inet_pton').inet_ntop
+    import win_inet_pton
+    socket.inet_ntop = win_inet_pton.inet_ntop
 if not hasattr(socket, 'inet_pton'):
-    socket.inet_pton = __import__('win_inet_pton').inet_pton
+    import win_inet_pton
+    socket.inet_pton = win_inet_pton.inet_pton
 
 logging.basicConfig(level=logging.DEBUG)
 basedir = os.path.dirname(os.path.abspath(__file__))
