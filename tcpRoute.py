@@ -15,15 +15,8 @@ TCP 路由器会自动选择最快的线路转发TCP连接。
 
 '''
 
-# 参考了 https://github.com/felix021/ssocks5/blob/master/msocks5.py
+# 感谢 https://github.com/felix021/ssocks5/blob/master/msocks5.py
 
-import sys
-stdout = sys.stdout
-reload(sys)
-sys.stdout = stdout
-
-
-import json
 import os
 import sys
 import struct
@@ -31,6 +24,7 @@ import signal
 import threading
 import time
 import logging
+import json
 import traceback
 from LRUCacheDict import LRUCacheDict
 
@@ -43,10 +37,16 @@ except:
     print >>sys.stderr, "please install gevent first!"
     sys.exit(1)
 
+
 try:
     import dns.resolver
+    import dns.rdtypes.IN.A
+    import dns.rdtypes.IN.AAAA
+    import dns.rdtypes.ANY.CNAME
 except:
     print >>sys.stderr, 'please install dnspython !'
+    sys.exit(1)
+
 
 # 悲剧，windows python 3.4 才支持 ipv6 的 inet_ntop
 # https://bugs.python.org/issue7171
@@ -57,63 +57,126 @@ if not socket.__dict__.has_key("inet_pton"):
     from win_inet_pton import inet_pton
     socket.inet_pton = inet_pton
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 basedir = os.path.dirname(os.path.abspath(__file__))
 
 
-getaddrinfoLock = threading.Lock()
-def getaddrinfo(hostname,port):
+errIP={}
+errIPLock = threading.Lock()
+nameservers = 'local'
+nameserversBackup = ['8.8.8.8','208.67.222.222']
+
+def dnsQuery(hostname):
     global errIP
-    try:
+    global errIPLock
+    with errIPLock:
+        _errIP = errIP.copy()
+
+    ipList = _dnsQuery(hostname,nameservers)
+
+    for ip in ipList:
+        if _errIP.has_key(ip):
+            # 解析异常，清空解析结果
+            logging.info(u'[DNS]默认解析服务器解析异常，hostname=%s ，ip=%s ,nameserver=%s'%(hostname,ip,nameservers))
+            ipList=[]
+            break
+
+    if not ipList:
+        # 无解析结果时使用备用服务器重新解析
         for i in range(5):
-            res = socket.getaddrinfo(hostname, port,0,socket.SOCK_STREAM,socket.IPPROTO_TCP)
-            with getaddrinfoLock:
-                for r in res:
-                    if not errIP.has_key(r[4][0]):
-                        return res
-                    else:
-                        logging.info('[DNS]%s(%s) ip is errIP !'%(hostname,r[4][0]))
-                        break
-    except socket.gaierror as e:
-        pass
-    return []
+            tcp = bool((i+1)%2) # 间隔使用 TCP 协议查询
+            ipList = _dnsQuery(hostname,nameserversBackup,tcp)
+            for ip in ipList:
+                if _errIP.has_key(ip):
+                    ipList=[]
+                    logging.info(u'[DNS]备用解析服务器解析异常(%s)，hostname=%s ，ip=%s ,nameserver=%s,TCP=%s'%(i,hostname,ip,nameserversBackup,tcp))
+                    break
+            if ipList:
+                logging.debug(u'[DNS]备用解析服务器解析成功(%s)，hostname=%s ，ip=%s ,nameserver=%s,TCP=%s'%(i,hostname,ipList,nameserversBackup,tcp))
+                return ipList
+    else:
+        logging.debug(u'[DNS]默认解析服务器解析成功，hostname=%s ，ip=%s ,nameserver=%s'%(hostname,ipList,nameservers))
 
-def getAddrinfoLoop():
-    try:
-        import dns.resolver
-    except:
-        return
-    while True:
-        logging.info('errIP loop start')
-        global errIP
-        _errIP = {}
+    if not ipList:
+        logging.error(u'[DNS]默认及备用解析服务器解析失败，hostname=%s ，ip=%s ,nameserver=%s ,nameserversBackup=%s'%(hostname,ipList,nameservers,nameserversBackup))
 
-        for i in range(5):
-            res=[]
-            try:
-                res = socket.getaddrinfo('asgdgksjiyrsdfgvsydsaunsbfyiobsnalnalnv%s.com'%i, port,0,socket.SOCK_STREAM,socket.IPPROTO_TCP)
-            except:
-                pass
-            for r in res:
-                 _errIP[r[4][0]] = int(time.time()*1000)
-            time.sleep(0.3)
-        with getaddrinfoLock:
-             errIP=_errIP.copy()
-        logging.info('errIP-1:\r\n' + '\r\n'.join(errIP))
+    return ipList
 
-        m = dns.resolver.Resolver()
-        m.nameservers=['8.8.8.123',]
-        for i in range(100):
-            for a in m.query('twitter.com').response.answer:
+def _dnsQuery(hostname,serveListr='local',tcp=False):
+    u'''纯粹的查询，并没有过滤之类的功能
+
+server:
+    ['8.8.8.8','8.8.4.4']
+返回值
+    ['1.1.1.1','2.2.2.2']
+    '''
+    if serveListr == 'local':
+        try:
+            res = socket.getaddrinfo(hostname, 80,0,socket.SOCK_STREAM,socket.IPPROTO_TCP)
+            return [r[4][0] for r in res]
+        except Exception:
+            info = traceback.format_exc()
+            logging.debug(u'[DNS][_dnsQuery][socket.getaddrinfo] 解析失败，host=%s 详细信息：'%hostname)
+            logging.debug('%s\r\n\r\n'%info)
+            return []
+    else:
+        try:
+            res = []
+            m = dns.resolver.Resolver()
+
+            if isinstance(serveListr,(str,unicode)):
+                serveListr = [serveListr,]
+
+            m.nameservers=serveListr
+            answerList = m.query('twitter.com',tcp=tcp).response.answer
+            for a in answerList:
                 for r in a:
-                    _errIP[r.address]=int(time.time()*1000)
-            time.sleep(0.1)
-        with getaddrinfoLock:
-             errIP=_errIP.copy()
-        logging.info('errIP-all:\r\n' + '\r\n'.join(errIP))
+                    res.append(r.address)
+            return res
+        except Exception:
+            info = traceback.format_exc()
+            logging.debug(u'[DNS][_dnsQuery][dns.resolver.query] 解析失败，host=%s ,nameserver=%s详细信息：'%(hostname,serveListr))
+            logging.debug('%s\r\n\r\n'%info)
+            return []
 
-        time.sleep(1*60*60)
+
+
+def dnsQueryLoop():
+    while True:
+        global  errIPLock
+        global  errIP
+        _errIP ={}
+
+        logging.info(u'[DNS]开始采集异常解析IP...')
+
+        for i in range(5):
+            ipList = _dnsQuery("sdfagdfkjvgsbyeastkisbtgvbgkjscabgfaklrv%s.com"%i,nameservers)
+            for ip in ipList:
+                logging.debug(u'[DNS]采集到本地异常IP(%s)。'%ip)
+                _errIP[ip] = int(time.time()*1000)
+            gevent.sleep(0.1)
+
+        with errIPLock:
+            if not errIP:
+                errIP.update(_errIP)
+
+        for i in range(100):
+            ipList = _dnsQuery('twitter.com',['8.8.8.234'])
+            for ip in ipList:
+                logging.debug(u'[DNS]采集到远程异常IP(%s)。'%ip)
+                _errIP[ip] = int(time.time()*1000)
+            gevent.sleep(0.1)
+
+        with errIPLock:
+            errIP.clear()
+            errIP.update(_errIP)
+
+        logging.info(u'[DNS]采集到的所有异常IP为：\r\n' + '\r\n'.join(errIP))
+
+        gevent.sleep(1*60*60)
+
+
 
 
 # 源客户端
@@ -234,7 +297,7 @@ class SClient:
 Content-Type:text/html; charset=utf-8
 
 <h1>http proxy is not supported</h1>
-http proxy is not supported, Only support socks5.''')
+http proxy is not supported, only support socks5.''')
         gevent.sleep(5)
         self.conn.close()
 
@@ -248,17 +311,17 @@ class DirectProxy():
     def forward(self,sClient,atyp,hostname,port,timeout=socket._GLOBAL_DEFAULT_TIMEOUT,ip=None):
         u'''阻塞调用，'''
         logging.debug('DirectProxy.forward(atyp=%s,hostname=%s,port=%s,timeout=%s,ip=%s)'%(atyp,hostname,port,timeout,ip))
-        addrinfoList = getaddrinfo(hostname,port)
-        logging.debug('[DNS]resolution name:%s\r\n'%hostname+'\r\n'.join([('IP:%s'%addrin[4][0]) for addrin in addrinfoList]))
+        ipList = dnsQuery(hostname)
+        logging.debug('[DNS]resolution name:%s\r\n'%hostname+'\r\n'.join([('IP:%s'%ip) for ip in ipList]))
         group = Group()
-        if ip in [addrin[4][0] for addrin in addrinfoList]:
+        if ip in ipList:
             group.add(gevent.spawn(self.__forward,sClient,(ip,port),hostname,timeout))
             logging.debug('cache ip hit Domain=%s ip=%s '%(hostname,ip))
         else:
-            for addrinfo in addrinfoList:
+            for ip in ipList:
                 # 启动多个代理进行转发尝试
                 # 最先成功的会执行转发，之后成功的会自动退出。
-                group.add(gevent.spawn(self.__forward,sClient,addrinfo[4],hostname,timeout))
+                group.add(gevent.spawn(self.__forward,sClient,(ip,port),hostname,timeout))
         group.join()
 
     def __forward(self,sClient,addr,hostname,timeout=socket._GLOBAL_DEFAULT_TIMEOUT):
@@ -533,15 +596,25 @@ class SocksServer(StreamServer):
 
     @staticmethod
     def start_server(port):
-        global errIP
-        errIP = {}
+        global nameservers
+        global nameserversBackup
 
-        threading.Thread(target=getAddrinfoLoop).start()
+        t = threading.Thread(target=dnsQueryLoop)
+        t.daemon = True
+        t.start()
 
-        server = SocksServer(('0.0.0.0', port))
         try:
             with open(os.path.join(basedir,"config.json"),'rb') as f:
                 config = json.load(f,encoding="utf-8")
+            port = config['port']
+            server = SocksServer(('0.0.0.0', port))
+
+            try:
+                nameservers = config['nameservers']
+                nameserversBackup = config['nameserversBackup']
+            except:
+                logging.exception(u'[DNS]DNS服务器配置错误！')
+
             for proxy in config['proxyList']:
                 if proxy['type'] == 'socks5':
                     server.addProxy(Socks5Proxy(proxy['host'],proxy['port']))
@@ -554,7 +627,13 @@ class SocksServer(StreamServer):
         gevent.signal(signal.SIGTERM, server.close)
         gevent.signal(signal.SIGINT, server.close)
         logging.info("Server is listening on 0.0.0.0:%d" % port)
-        server.serve_forever()
+        try:
+            server.serve_forever()
+        except Exception as e:
+            if e.errno == 10048:
+                logging.error(u'%s 端口已被使用，程序退出。'%port)
+                server.close()
+
 
 if __name__ == '__main__':
     import sys
