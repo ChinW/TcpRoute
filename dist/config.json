@@ -1,5 +1,6 @@
 {
   "port":7070,
+  "port":7070,
   "nameservers":"system",
   "nameserversBackup":["8.8.8.8","208.67.222.222"],
   "proxyList":[
@@ -9,5 +10,5 @@
                       "port":5555
                   }
               ],
-  "IpBlacklist":[]
+  "IpBlacklist":["199.16.158.168", "199.16.158.179"]
 }
