@@ -96,7 +96,7 @@ def dnsQuery(hostname):
         logging.debug(u'[DNS]默认解析服务器解析成功，hostname=%s ，ip=%s ,nameserver=%s'%(hostname,ipList,nameservers))
 
     if not ipList:
-        logging.error(u'[DNS]默认及备用解析服务器解析失败，hostname=%s ，ip=%s ,nameserver=%s ,nameserversBackup=%s'%(hostname,ipList,nameservers,nameserversBackup))
+        logging.warn(u'[DNS]默认及备用解析服务器解析失败，hostname=%s ，ip=%s ,nameserver=%s ,nameserversBackup=%s'%(hostname,ipList,nameservers,nameserversBackup))
 
     return ipList
 
@@ -217,7 +217,7 @@ class SClient:
             self.httpHandle(ver)
         else:
             # 未知的类型，以 socks5 协议拒绝
-            logging.error('Receive an unknown protocol header')
+            logging.warn('Receive an unknown protocol header')
             self.pack('BB',0x05,0xff)
 
     def isConnected(self):
@@ -241,7 +241,7 @@ class SClient:
         ver,cmd,rsv,atyp = self.unpack('BBBB')
 
         if ver != 0x05 or cmd != 0x01:
-            logging.error(u'[SClient]收到未知类型的请求，关闭连接。 ver=%s ,cmd=%s'%(ver,cmd))
+            logging.warn(u'[SClient]收到未知类型的请求，关闭连接。 ver=%s ,cmd=%s'%(ver,cmd))
             self.pack('BBBBIH',0x05, 0x07, 0x00, 0x01, 0, 0)
             gevent.sleep(3)
             self.conn.close()
@@ -260,7 +260,7 @@ class SClient:
             ipv61 ,ipv62,port = self.unpack('!2QH')
             hostname = socket.inet_ntop(socket.AF_INET6, struct.pack('!2Q', ipv61, ipv62))
         else:
-            logging.error(u'[SClient]收到未知的目的地址类型，关闭连接。 atyp=%s '%(atyp))
+            logging.warn(u'[SClient]收到未知的目的地址类型，关闭连接。 atyp=%s '%(atyp))
             self.pack('!BBBBIH', 0x05, 0x07, 0x00, 0x01, 0, 0)
             gevent.sleep(3)
             self.conn.close()
@@ -430,8 +430,8 @@ class Socks5Proxy():
         except:
             #TODO: 处理下连接失败
             info = traceback.format_exc()
-            logging.error(u'[socks5] 连接代理服务器失败！ host:%s ,port:%s ,timeout:%s'%(self.host,self.port,timeout,))
-            logging.error('%s\r\n\r\n'%info)
+            logging.warn(u'[socks5] 连接代理服务器失败！ host:%s ,port:%s ,timeout:%s'%(self.host,self.port,timeout,))
+            logging.warn('%s\r\n\r\n'%info)
 
             return
 
@@ -462,14 +462,14 @@ class Socks5Proxy():
             a, b = struct.unpack('!2Q', _str)
             Socks5Proxy.pack(s,'!2QH',a,b,port)
         else:
-            logging.error(u'[socks5]代理服务器绑定地址类型未知！ atyp:%s'%atyp)
+            logging.warn(u'[socks5]代理服务器绑定地址类型未知！ atyp:%s'%atyp)
             s.close()
             return
 
         # 请求回应
         ver,rep,rsv,atyp = Socks5Proxy.unpack(s,'BBBB')
         if ver != 0x05 or rep != 0x00:
-            logging.error(u'[socks5]代理服务器无法连接目标网站！ ver:%s ,rep:%s'%(ver,rep))
+            logging.warn(u'[socks5]代理服务器无法连接目标网站！ ver:%s ,rep:%s'%(ver,rep))
             s.close()
             return
 
