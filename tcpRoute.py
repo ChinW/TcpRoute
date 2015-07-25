@@ -55,7 +55,7 @@ if not hasattr(socket, 'inet_pton'):
     import win_inet_pton
     socket.inet_pton = win_inet_pton.inet_pton
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 basedir = os.path.dirname(os.path.abspath(__file__))
 
 dnsPool = ThreadPool(20)
@@ -482,7 +482,7 @@ class Socks5Proxy():
         Socks5Proxy.pack(s,'!BBBB',0x05,0x01,0x00,atyp)
         if atyp == 0x01:
             #ipv4
-            Socks5Proxy.pack(s,'!IH',socket.inet_aton(hostname),port)
+            Socks5Proxy.pack(s,'!IH',struct.unpack('!I',socket.inet_aton(hostname))[0],port)
         elif atyp == 0x03:
             # 域名
             Socks5Proxy.pack(s,'!B%ssH'%len(hostname),len(hostname),hostname,port)
