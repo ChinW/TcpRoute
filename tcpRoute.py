@@ -49,12 +49,10 @@ except:
 
 # 悲剧，windows python 3.4 才支持 ipv6 的 inet_ntop
 # https://bugs.python.org/issue7171
-if not socket.__dict__.has_key('inet_ntop'):
-    from win_inet_pton import inet_ntop
-    socket.inet_ntop = inet_ntop
-if not socket.__dict__.has_key("inet_pton"):
-    from win_inet_pton import inet_pton
-    socket.inet_pton = inet_pton
+if not hasattr(socket, 'inet_ntop'):
+    socket.inet_ntop = __import__('win_inet_pton').inet_ntop
+if not hasattr(socket, 'inet_pton'):
+    socket.inet_pton = __import__('win_inet_pton').inet_pton
 
 logging.basicConfig(level=logging.DEBUG)
 basedir = os.path.dirname(os.path.abspath(__file__))
@@ -74,7 +72,7 @@ def dnsQuery(hostname):
     ipList = _dnsQuery(hostname,nameservers)
 
     for ip in ipList:
-        if _errIP.has_key(ip):
+        if ip in _errIP:
             # 解析异常，清空解析结果
             logging.info(u'[DNS]默认解析服务器解析异常，hostname=%s ，ip=%s ,nameserver=%s'%(hostname,ip,nameservers))
             ipList=[]
@@ -86,7 +84,7 @@ def dnsQuery(hostname):
             tcp = bool((i+1)%2) # 间隔使用 TCP 协议查询
             ipList = _dnsQuery(hostname,nameserversBackup,tcp)
             for ip in ipList:
-                if _errIP.has_key(ip):
+                if ip in _errIP:
                     ipList=[]
                     logging.info(u'[DNS]备用解析服务器解析异常(%s)，hostname=%s ，ip=%s ,nameserver=%s,TCP=%s'%(i,hostname,ip,nameserversBackup,tcp))
                     break
