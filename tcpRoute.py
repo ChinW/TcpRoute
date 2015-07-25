@@ -20,7 +20,6 @@ import os
 import sys
 import struct
 import signal
-import threading
 import time
 import logging
 import json
@@ -62,20 +61,16 @@ basedir = os.path.dirname(os.path.abspath(__file__))
 dnsPool = ThreadPool(20)
 configIpBlacklist = []
 errIP={}
-errIPLock = threading.Lock()
 nameservers = 'system'
 nameserversBackup = ['8.8.8.8','208.67.222.222']
 
 def dnsQuery(hostname):
     global errIP
-    global errIPLock
-    with errIPLock:
-        _errIP = errIP.copy()
 
     ipList = _dnsQuery(hostname,nameservers)
 
     for ip in ipList:
-        if ip in _errIP:
+        if ip in errIP:
             # 解析异常，清空解析结果
             logging.info(u'[DNS]默认解析服务器解析异常，hostname=%s ，ip=%s ,nameserver=%s'%(hostname,ip,nameservers))
             ipList=[]
@@ -87,7 +82,7 @@ def dnsQuery(hostname):
             tcp = bool((i+1)%2) # 间隔使用 TCP 协议查询
             ipList = _dnsQuery(hostname,nameserversBackup,tcp)
             for ip in ipList:
-                if ip in _errIP:
+                if ip in errIP:
                     ipList=[]
                     logging.info(u'[DNS]备用解析服务器解析异常(%s)，hostname=%s ，ip=%s ,nameserver=%s,TCP=%s'%(i,hostname,ip,nameserversBackup,tcp))
                     break
@@ -151,7 +146,6 @@ def _dnspythonQuery(hostname,serveListr,tcp=False):
 
 def dnsQueryLoop():
     while True:
-        global  errIPLock
         global  errIP
         global  configIpBlacklist
         _errIP ={}
@@ -159,9 +153,9 @@ def dnsQueryLoop():
         for ip in configIpBlacklist:
             _errIP[ip]=-1
 
-        with errIPLock:
-            if not errIP:
-                errIP.update(_errIP)
+
+        if not errIP:
+            errIP.update(_errIP)
 
         logging.info(u'[DNS]开始采集异常解析IP...')
 
@@ -185,9 +179,9 @@ def dnsQueryLoop():
                     logging.debug(u'[DNS]采集到域名服务器(%s)域名纠错IP(%s)。' % (dnsServer,ip))
                     _errIP[ip] = int(time.time()*1000)
 
-        with errIPLock:
-            if len(errIP) == len(configIpBlacklist):
-                errIP.update(_errIP)
+
+        if len(errIP) == len(configIpBlacklist):
+            errIP.update(_errIP)
 
         for i in range(100):
             ipList = _dnsQuery('twitter.com',['8.8.8.234','8.8.8.123',])
@@ -195,14 +189,12 @@ def dnsQueryLoop():
                 logging.debug(u'[DNS]采集到远程异常IP(%s)。'%ip)
                 _errIP[ip] = int(time.time()*1000)
             if i%10 == 0:
-                with errIPLock:
-                    errIP.clear()
-                    errIP.update(_errIP)
+                errIP.clear()
+                errIP.update(_errIP)
             gevent.sleep(1)
 
-        with errIPLock:
-            errIP.clear()
-            errIP.update(_errIP)
+        errIP.clear()
+        errIP.update(_errIP)
 
         logging.info(u'[DNS]采集到的所有异常IP为：\r\n' + '\r\n'.join(errIP))
 
