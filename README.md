@@ -10,13 +10,31 @@ TCP 路由器会自动选择最快的线路转发TCP连接。
 
 ## linux 安装
 
+```bash
 $ sudo pip install greenlet gevent dnspython
 $ vi config.json  # 修改配置
-# python tcpRoute.py
+$ python tcpRoute.py
+```
 
 ## 配置
 
 config.json 为配置文件，json格式。
+
+```json
+{
+  "port":7070,
+  "nameservers":"system",
+  "nameserversBackup":["8.8.8.8","208.67.222.222"],
+  "proxyList":[
+                  {
+                      "type":"socks5",
+                      "host":"127.0.0.1",
+                      "port":5555
+                  }
+              ],
+  "IpBlacklist":[]
+}
+```
 
 port 为监听端口。目前只提供 socks5 代理服务。
 
@@ -43,5 +61,10 @@ IpBlacklist 为静态 ip 黑名单，黑名单上的ip不会用来建立连接(�
 * 对 DNS 解析获得的多个IP同时尝试连接，最终使用最快建立的连接。
 * 同时使用直连及代理建立连接，最终使用最快建立的连接。
 * 缓存10分钟上次检测到的最快线路方便以后使用。
+* 解析不存在域名获得域名纠错IP，并添加到 IP黑名单
+* 使用不存在DNS服务器解析 twitter.com ，获得异常IP，并添加到 IP黑名单
 * 不使用异常的dns解析结果。
 
+## 感谢
+
+* https://github.com/felix021/ssocks5/blob/master/msocks5.py
