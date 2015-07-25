@@ -576,7 +576,7 @@ class Socks5Proxy():
 class SocksServer(StreamServer):
 
     def __init__(self, listener):
-        StreamServer.__init__(self, listener)
+        StreamServer.__init__(self, listener,backlog=2048,)
         self.proxyDict={}
         self.addProxy(DirectProxy())
         # 路由缓存格式
