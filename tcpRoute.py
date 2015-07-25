@@ -16,7 +16,6 @@ TCP 路由器会自动选择最快的线路转发TCP连接。
 感谢 https://github.com/felix021/ssocks5/blob/master/msocks5.py
 '''
 
-
 import os
 import sys
 import struct
@@ -34,6 +33,7 @@ try:
     from gevent import socket
     from gevent.server import StreamServer
     from gevent.pool import Group
+    from gevent.threadpool import ThreadPool
 except:
     print >>sys.stderr, "please install gevent first!"
     sys.exit(1)
@@ -57,6 +57,7 @@ if not hasattr(socket, 'inet_pton'):
 logging.basicConfig(level=logging.DEBUG)
 basedir = os.path.dirname(os.path.abspath(__file__))
 
+dnsPool = ThreadPool(20)
 configIpBlacklist = []
 errIP={}
 errIPLock = threading.Lock()
@@ -80,7 +81,7 @@ def dnsQuery(hostname):
 
     if not ipList:
         # 无解析结果时使用备用服务器重新解析
-        for i in range(5):
+        for i in range(4):
             tcp = bool((i+1)%2) # 间隔使用 TCP 协议查询
             ipList = _dnsQuery(hostname,nameserversBackup,tcp)
             for ip in ipList:
@@ -91,6 +92,9 @@ def dnsQuery(hostname):
             if ipList:
                 logging.debug(u'[DNS]备用解析服务器解析成功(%s)，hostname=%s ，ip=%s ,nameserver=%s,TCP=%s'%(i,hostname,ipList,nameserversBackup,tcp))
                 return ipList
+            else:
+                logging.info(u'[DNS]备用解析服务器解析失败(%s)，hostname=%s ，ip=%s ,nameserver=%s,TCP=%s'%(i,hostname,ip,nameserversBackup,tcp))
+
     else:
         logging.debug(u'[DNS]默认解析服务器解析成功，hostname=%s ，ip=%s ,nameserver=%s'%(hostname,ipList,nameservers))
 
@@ -119,24 +123,29 @@ server:
             logging.debug('%s\r\n\r\n'%info)
             return []
     else:
-        try:
-            res = []
-            m = dns.resolver.Resolver()
+        t = dnsPool.spawn(_dnspythonQuery,hostname,serveListr,tcp)
+        return t.get(True)
 
-            if isinstance(serveListr,(str,unicode)):
-                serveListr = [serveListr,]
+def _dnspythonQuery(hostname,serveListr,tcp=False):
+    try:
+        res = []
+        m = dns.resolver.Resolver()
 
-            m.nameservers=serveListr
-            answerList = m.query('twitter.com',tcp=tcp).response.answer
-            for a in answerList:
-                for r in a:
-                    res.append(r.address)
-            return res
-        except Exception:
-            info = traceback.format_exc()
-            logging.debug(u'[DNS][_dnsQuery][dns.resolver.query] 解析失败，host=%s ,nameserver=%s详细信息：'%(hostname,serveListr))
-            logging.debug('%s\r\n\r\n'%info)
-            return []
+        if isinstance(serveListr,(str,unicode)):
+            serveListr = [serveListr,]
+
+        m.nameservers=serveListr
+
+        answerList = m.query(hostname,tcp=tcp).response.answer
+        for a in answerList:
+            for r in a:
+                res.append(r.address)
+        return res
+    except :
+        info = traceback.format_exc()
+        logging.debug(u'[DNS][_dnspythonQuery][dns.resolver.query] 解析失败，host=%s ,nameserver=%s详细信息：'%(hostname,serveListr))
+        logging.debug('%s\r\n\r\n'%info)
+        return []
 
 def dnsQueryLoop():
     while True:
@@ -167,13 +176,12 @@ def dnsQueryLoop():
         else:
             allDnsServer.update(nameserversBackup)
 
-        for i in range(5):
+        for i in range(3):
             for dnsServer in allDnsServer:
                 ipList = _dnsQuery("sdfagdfkjvgsbyeastkisbtgvbgkjscabgfaklrv%s.com"%i,dnsServer)
                 for ip in ipList:
                     logging.debug(u'[DNS]采集到域名服务器(%s)域名纠错IP(%s)。' % (dnsServer,ip))
                     _errIP[ip] = int(time.time()*1000)
-                gevent.sleep(0.2)
 
         with errIPLock:
             if len(errIP) == len(configIpBlacklist):
@@ -665,9 +673,7 @@ class SocksServer(StreamServer):
             logging.exception('[config]配置错误！。')
             return
 
-        t = threading.Thread(target=dnsQueryLoop)
-        t.daemon = True
-        t.start()
+        t = gevent.spawn(dnsQueryLoop)
 
         gevent.signal(signal.SIGTERM, server.close)
         gevent.signal(signal.SIGINT, server.close)
