@@ -25,7 +25,7 @@ import logging
 import json
 import traceback
 import math
-from LRUCacheDict import LRUCacheDict
+from LRUCacheDict import LRUCacheDict,lru_cache
 
 try:
     import gevent
@@ -64,6 +64,7 @@ errIP={}
 nameservers = 'system'
 nameserversBackup = ['8.8.8.8','208.67.222.222']
 
+@lru_cache(500,10*60*1000,lock=None)
 def dnsQuery(hostname):
     global errIP
 
