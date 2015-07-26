@@ -229,20 +229,20 @@ class SClient:
         (ver,) = self.unpack('B')
         if ver == 0x04:
             # socks4 协议
-            logging.debug('[客户端] 协议错误，TcpRoute 不支持 socks4 协议。')
+            logging.debug(u'[客户端] 协议错误，TcpRoute 不支持 socks4 协议。')
             # socks4 拒绝转发回应。
             self.pack('BBIH',0,0x5b,0,0)
         elif ver ==0x05:
             # socks5 协议
-            logging.debug('Receive socks5 protocol header')
+            logging.debug(u'Receive socks5 protocol header')
             self.socks5Handle(ver)
         elif chr(ver) in 'GgPpHhDdTtCcOo':
             # 误被当作 http 代理
-            logging.error('[客户端] 协议错误，TcpRoute 不支持 http 代理协议。请修改浏览器配置，将代理服务器类型改为 socks5 。')
+            logging.error(u'[客户端] 协议错误，TcpRoute 不支持 http 代理协议。请修改浏览器配置，将代理服务器类型改为 socks5 。')
             self.httpHandle(ver)
         else:
             # 未知的类型，以 socks5 协议拒绝
-            logging.error('[客户端] 未知的协议，连接关闭。')
+            logging.error(u'[客户端] 未知的协议，连接关闭。')
             self.pack('BB',0x05,0xff)
 
     def isConnected(self):
@@ -290,7 +290,7 @@ class SClient:
             gevent.sleep(3)
             self.conn.close()
             return
-        logging.debug('[SClient] host:%s   prot:%s'%(hostname,port))
+        logging.debug(u'[SClient] host:%s   prot:%s'%(hostname,port))
 
         # 对外发起请求
 
@@ -311,11 +311,11 @@ class SClient:
 
             proxy = self.server.getProxy(proxyName)
             if proxy:
-                logging.debug('[Cache] hit host:%s ,prot:%s ,proxy:%s ,ip:%s,tcpping:%s,timeout:%s'%(hostname,port,proxy.getName(),hitIp,tcpping,timeout))
+                logging.debug(u'[Cache] hit host:%s ,prot:%s ,proxy:%s ,ip:%s,tcpping:%s,timeout:%s'%(hostname,port,proxy.getName(),hitIp,tcpping,timeout))
                 proxy.forward(self,atyp,hostname,port,timeout,hitIp)
         if not self.connected:
             # 不管是没有缓存记录还是没连接上，都使用全部链接做一次测试。
-            logging.debug('[all proxt]  host:%s ,prot:%s '%(hostname,port))
+            logging.debug(u'[all proxt]  host:%s ,prot:%s '%(hostname,port))
             group = Group()
             for proxy in self.server.getProxy():
                 # 启动多个代理进行转发尝试
@@ -351,13 +351,13 @@ class DirectProxy():
     u'''直接连接'''
     def forward(self,sClient,atyp,hostname,port,timeout=socket._GLOBAL_DEFAULT_TIMEOUT,ip=None):
         u'''阻塞调用，'''
-        logging.debug('DirectProxy.forward(atyp=%s,hostname=%s,port=%s,timeout=%s,ip=%s)'%(atyp,hostname,port,timeout,ip))
+        logging.debug(u'DirectProxy.forward(atyp=%s,hostname=%s,port=%s,timeout=%s,ip=%s)'%(atyp,hostname,port,timeout,ip))
         ipList = dnsQuery(hostname)
-        logging.debug('[DNS]resolution name:%s\r\n'%hostname+'\r\n'.join([('IP:%s'%ip) for ip in ipList]))
+        logging.debug(u'[DNS]resolution name:%s\r\n'%hostname+'\r\n'.join([('IP:%s'%ip) for ip in ipList]))
         group = Group()
         if ip in ipList:
             group.add(gevent.spawn(self.__forward,sClient,(ip,port),hostname,timeout))
-            logging.debug('cache ip hit Domain=%s ip=%s '%(hostname,ip))
+            logging.debug(u'cache ip hit Domain=%s ip=%s '%(hostname,ip))
         else:
             for ip in ipList:
                 # 启动多个代理进行转发尝试
@@ -368,7 +368,7 @@ class DirectProxy():
     def __forward(self,sClient,addr,hostname,timeout=socket._GLOBAL_DEFAULT_TIMEOUT):
         ip = addr[0]
         port = addr[1]
-        logging.debug('DirectProxy.__forward(hostname=%s,ip=%s,port=%s,timeout=%s)'%(hostname,ip,port,timeout))
+        logging.debug(u'DirectProxy.__forward(hostname=%s,ip=%s,port=%s,timeout=%s)'%(hostname,ip,port,timeout))
         startTime = int(time.time()*1000)
         try:
             s = socket.create_connection(addr,timeout)
@@ -383,7 +383,7 @@ class DirectProxy():
         sClient.server.upProxyPing(self.getName(),hostname,addr[1],int(time.time()*1000)-startTime,ip)
         if not sClient.connected:
             # 第一个连接上的
-            logging.debug('[DirectProxy] Connection hit (hostname=%s,ip=%s,port=%s,timeout=%s)'%(hostname,ip,port,timeout))
+            logging.debug(u'[DirectProxy] Connection hit (hostname=%s,ip=%s,port=%s,timeout=%s)'%(hostname,ip,port,timeout))
             sClient.connected=True
 
             # 为了应付长连接推送，超时设置的长点。
@@ -403,7 +403,7 @@ class DirectProxy():
         else:
             # 不是第一个连接上的
             s.close()
-            logging.debug('[DirectProxy] Connection miss (hostname=%s,ip=%s,port=%s,timeout=%s)'%(hostname,ip,port,timeout))
+            logging.debug(u'[DirectProxy] Connection miss (hostname=%s,ip=%s,port=%s,timeout=%s)'%(hostname,ip,port,timeout))
 
 
     def __forwardData(self,s,d):
@@ -426,10 +426,10 @@ class DirectProxy():
                 logging.debug(u'远端重置了连接。')
                 pass
             else:
-                logging.exception('DirectProxy.__forwardData')
+                logging.exception(u'DirectProxy.__forwardData')
         finally:
             # 这里 和 socks5 Handle 会重复关闭
-            logging.debug('DirectProxy.__forwardData  finally')
+            logging.debug(u'DirectProxy.__forwardData  finally')
             gevent.sleep(5)
             s.close()
             d.close()
@@ -464,7 +464,7 @@ class Socks5Proxy():
 
     def forward(self,sClient,atyp,hostname,port,timeout=socket._GLOBAL_DEFAULT_TIMEOUT,ip=None):
         u'''阻塞调用，'''
-        logging.debug('socks5Proxy.forward(atyp=%s,hostname=%s,port=%s,timeout=%s,ip=%s)'%(atyp,hostname,port,timeout,ip))
+        logging.debug(u'socks5Proxy.forward(atyp=%s,hostname=%s,port=%s,timeout=%s,ip=%s)'%(atyp,hostname,port,timeout,ip))
 
         self.__forward(sClient,atyp,hostname,port,timeout)
 
@@ -531,7 +531,7 @@ class Socks5Proxy():
         sClient.server.upProxyPing(self.getName(),hostname,port,int(time.time()*1000)-startTime,None)
         if not sClient.connected:
             # 第一个连接上的
-            logging.debug('[socks5Proxy] Connection hit (%s,%s,%s,%s)'%(hostname,atyp,port,timeout))
+            logging.debug(u'[socks5Proxy] Connection hit (%s,%s,%s,%s)'%(hostname,atyp,port,timeout))
 
             sClient.connected=True
 
@@ -550,7 +550,7 @@ class Socks5Proxy():
         else:
             # 不是第一个连接上的
             s.close()
-            logging.debug('[socks5Proxy] Connection miss (%s,%s,%s,%s)'%(hostname,atyp,port,timeout))
+            logging.debug(u'[socks5Proxy] Connection miss (%s,%s,%s,%s)'%(hostname,atyp,port,timeout))
 
     def __forwardData(self,s,d):
         try:
@@ -572,10 +572,10 @@ class Socks5Proxy():
                 logging.debug(u'远端重置了连接。')
                 pass
             else:
-                logging.exception('socks5Proxy.__forwardData')
+                logging.exception(u'socks5Proxy.__forwardData')
         finally:
             # 这里 和 socks5Handle 会重复关闭
-            logging.debug('socks5Proxy.__forwardData close()')
+            logging.debug(u'socks5Proxy.__forwardData close()')
             gevent.sleep(5)
             s.close()
             d.close()
@@ -638,13 +638,13 @@ class SocksServer(StreamServer):
                             }
 
     def handle(self, sock, addr):
-        logging.debug('connection from %s:%s' % addr)
+        logging.debug(u'connection from %s:%s' % addr)
 
         client = SClient(self,sock,addr)
         try:
             client.handle()
         except:
-            logging.exception('client.handle()')
+            logging.exception(u'client.handle()')
             client.conn.close()
 
     def close(self):
@@ -687,7 +687,7 @@ class SocksServer(StreamServer):
                 else:
                     logging.error(u'[config] 未知的代理类型。type=%s'%proxy['type'])
         except:
-            logging.exception('[config]配置错误！。')
+            logging.exception(u'[config]配置错误！。')
             return
 
         t = gevent.spawn(dnsQueryLoop)
