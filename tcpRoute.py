@@ -90,7 +90,7 @@ def dnsQuery(hostname):
                 logging.debug(u'[DNS]备用解析服务器解析成功(%s)，hostname=%s ，ip=%s ,nameserver=%s,TCP=%s'%(i,hostname,ipList,nameserversBackup,tcp))
                 return ipList
             else:
-                logging.info(u'[DNS]备用解析服务器解析失败(%s)，hostname=%s ，ip=%s ,nameserver=%s,TCP=%s'%(i,hostname,ip,nameserversBackup,tcp))
+                logging.info(u'[DNS]备用解析服务器解析失败(%s)，hostname=%s ，nameserver=%s,TCP=%s'%(i,hostname,nameserversBackup,tcp))
 
     else:
         logging.debug(u'[DNS]默认解析服务器解析成功，hostname=%s ，ip=%s ,nameserver=%s'%(hostname,ipList,nameservers))
@@ -232,7 +232,7 @@ class SClient:
             logging.debug(u'[客户端] 协议错误，TcpRoute 不支持 socks4 协议。')
             # socks4 拒绝转发回应。
             self.pack('BBIH',0,0x5b,0,0)
-        elif ver ==0x05:
+        elif ver == 0x05:
             # socks5 协议
             logging.debug(u'Receive socks5 protocol header')
             self.socks5Handle(ver)
@@ -311,11 +311,11 @@ class SClient:
 
             proxy = self.server.getProxy(proxyName)
             if proxy:
-                logging.debug(u'[Cache] hit host:%s ,prot:%s ,proxy:%s ,ip:%s,tcpping:%s,timeout:%s'%(hostname,port,proxy.getName(),hitIp,tcpping,timeout))
+                logging.debug(u'[ProxyCache] hit host:%s ,prot:%s ,proxy:%s ,ip:%s,tcpping:%s,timeout:%s'%(hostname,port,proxy.getName(),hitIp,tcpping,timeout))
                 proxy.forward(self,atyp,hostname,port,timeout,hitIp)
         if not self.connected:
             # 不管是没有缓存记录还是没连接上，都使用全部链接做一次测试。
-            logging.debug(u'[all proxt]  host:%s ,prot:%s '%(hostname,port))
+            logging.debug(u'[All Proxy]  host:%s ,prot:%s '%(hostname,port))
             group = Group()
             for proxy in self.server.getProxy():
                 # 启动多个代理进行转发尝试
@@ -380,10 +380,11 @@ class DirectProxy():
             return
         # 直连的话直接链接到服务器就可以，
         # 如果是 socks5 代理，时间统计需要包含远端代理服务器连接到远端服务器的时间。
-        sClient.server.upProxyPing(self.getName(),hostname,addr[1],int(time.time()*1000)-startTime,ip)
+        tcpping = int(time.time()*1000)-startTime
+        sClient.server.upProxyPing(self.getName(),hostname,addr[1],tcpping,ip)
         if not sClient.connected:
             # 第一个连接上的
-            logging.debug(u'[DirectProxy] Connection hit (hostname=%s,ip=%s,port=%s,timeout=%s)'%(hostname,ip,port,timeout))
+            logging.debug(u'[DirectProxy] Connection hit (hostname=%s,ip=%s,port=%s,timeout=%s, tcpping=%s)'%(hostname,ip,port,timeout,tcpping))
             sClient.connected=True
 
             # 为了应付长连接推送，超时设置的长点。
@@ -403,7 +404,7 @@ class DirectProxy():
         else:
             # 不是第一个连接上的
             s.close()
-            logging.debug(u'[DirectProxy] Connection miss (hostname=%s,ip=%s,port=%s,timeout=%s)'%(hostname,ip,port,timeout))
+            logging.debug(u'[DirectProxy] Connection miss (hostname=%s,ip=%s,port=%s,timeout=%s, tcpping=%s)'%(hostname,ip,port,timeout,tcpping))
 
 
     def __forwardData(self,s,d):
@@ -475,23 +476,25 @@ class Socks5Proxy():
         except:
             #TODO: 处理下连接失败
             info = traceback.format_exc()
-            logging.warn(u'[socks5] 远程代理服务器连接失败！ host:%s ,port:%s ,timeout:%s'%(self.host,self.port,timeout,))
+            tcpping = int(time.time()*1000)-startTime
+            logging.warn(u'[socks5] 远程代理服务器连接失败！ host:%s ,port:%s ,timeout:%s,time:%s'%(self.host,self.port,timeout,tcpping))
             logging.warn('%s\r\n\r\n'%info)
 
             return
-
-        logging.debug(u'[socks5] 远程代理服务器已连接  host:%s ,port:%s ,timeout:%s'%(self.host,self.port,timeout))
+        tcpping = int(time.time()*1000)-startTime
+        logging.debug(u'[socks5] 远程代理服务器已连接  host:%s ,port:%s ,timeout:%s,time:%s'%(self.host,self.port,timeout,tcpping))
 
         # 登录
         Socks5Proxy.pack(s,'BBB',0x05,0x01,0x00)
 
         # 登录回应
         ver,method = Socks5Proxy.unpack(s,'BB')
+        tcpping = int(time.time()*1000)-startTime
         if ver != 0x05 or method != 0x00:
-            logging.error(u'[socks5] 远程代理服务器登录失败！ host:%s ,port:%s'%(self.host,self.port))
+            logging.error(u'[socks5] 远程代理服务器登录失败！ host:%s ,port:%s, time:%s'%(self.host,self.port,tcpping))
             s.close()
             return
-        logging.debug(u'[socks5] 远程代理服务器登陆成功。 host:%s ,port:%s'%(self.host,self.port))
+        logging.debug(u'[socks5] 远程代理服务器登陆成功。 host:%s ,port:%s ,time:%s'%(self.host,self.port,tcpping))
 
         # 请求连接
         Socks5Proxy.pack(s,'!BBBB',0x05,0x01,0x00,atyp)
@@ -507,14 +510,16 @@ class Socks5Proxy():
             a, b = struct.unpack('!2Q', _str)
             Socks5Proxy.pack(s,'!2QH',a,b,port)
         else:
-            logging.warn(u'[socks5] 远程代理服务器绑定地址类型未知！ atyp:%s'%atyp)
+            tcpping = int(time.time()*1000)-startTime
+            logging.warn(u'[socks5] 远程代理服务器绑定地址类型未知！ atyp:%s ,time:%s'%(atyp,tcpping))
             s.close()
             return
 
         # 请求回应
         ver,rep,rsv,atyp = Socks5Proxy.unpack(s,'BBBB')
         if ver != 0x05 or rep != 0x00:
-            logging.warn(u'[socks5] 远程代理服务器无法连接目标网站！ ver:%s ,rep:%s'%(ver,rep))
+            tcpping = int(time.time()*1000)-startTime
+            logging.warn(u'[socks5] 远程代理服务器无法连接目标网站！ ver:%s ,rep:%s， time=%s'%(ver,rep,tcpping))
             s.close()
             return
 
@@ -528,10 +533,11 @@ class Socks5Proxy():
 
         # 直连的话连接建立就可以了
         # 如果是 socks5 代理，时间统计需要包含远端代理服务器连接到远端服务器的时间。
-        sClient.server.upProxyPing(self.getName(),hostname,port,int(time.time()*1000)-startTime,None)
+        tcpping = int(time.time()*1000)-startTime
+        sClient.server.upProxyPing(self.getName(),hostname,port,tcpping,None)
         if not sClient.connected:
             # 第一个连接上的
-            logging.debug(u'[socks5Proxy] Connection hit (%s,%s,%s,%s)'%(hostname,atyp,port,timeout))
+            logging.debug(u'[Socks5Proxy] 连接命中 (hostname=%s,atyp=%s,port=%s,timeout=%s,tcpping=%s)'%(hostname,atyp,port,timeout,tcpping))
 
             sClient.connected=True
 
@@ -550,7 +556,7 @@ class Socks5Proxy():
         else:
             # 不是第一个连接上的
             s.close()
-            logging.debug(u'[socks5Proxy] Connection miss (%s,%s,%s,%s)'%(hostname,atyp,port,timeout))
+            logging.debug(u'[Socks5Proxy] 连接未命中 (hostname=%s,atyp=%s,port=%s,timeout=%s,tcpping=%s)'%(hostname,atyp,port,timeout,tcpping))
 
     def __forwardData(self,s,d):
         try:
