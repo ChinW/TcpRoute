@@ -72,7 +72,7 @@ def dnsQuery(hostname):
     for ip in ipList:
         if ip in errIP:
             # 解析异常，清空解析结果
-            logging.info(u'[DNS]默认解析服务器解析异常，hostname=%s ，ip=%s ,nameserver=%s'%(hostname,ip,nameservers))
+            logging.info(u'[DNS]默认解析服务器解析到异常IP，hostname=%s ，ip=%s ,nameserver=%s'%(hostname,ip,nameservers))
             ipList=[]
             break
 
@@ -84,7 +84,7 @@ def dnsQuery(hostname):
             for ip in ipList:
                 if ip in errIP:
                     ipList=[]
-                    logging.info(u'[DNS]备用解析服务器解析异常(%s)，hostname=%s ，ip=%s ,nameserver=%s,TCP=%s'%(i,hostname,ip,nameserversBackup,tcp))
+                    logging.info(u'[DNS]备用解析服务器解析得到异常IP(%s)，hostname=%s ，ip=%s ,nameserver=%s,TCP=%s'%(i,hostname,ip,nameserversBackup,tcp))
                     break
             if ipList:
                 logging.debug(u'[DNS]备用解析服务器解析成功(%s)，hostname=%s ，ip=%s ,nameserver=%s,TCP=%s'%(i,hostname,ipList,nameserversBackup,tcp))
@@ -176,7 +176,7 @@ def dnsQueryLoop():
             for dnsServer in allDnsServer:
                 ipList = _dnsQuery("sdfagdfkjvgsbyeastkisbtgvbgkjscabgfaklrv%s.com"%i,dnsServer)
                 for ip in ipList:
-                    logging.debug(u'[DNS]采集到域名服务器(%s)域名纠错IP(%s)。' % (dnsServer,ip))
+                    logging.info(u'[DNS]采集到域名服务器(%s)域名纠错IP(%s)。' % (dnsServer,ip))
                     _errIP[ip] = int(time.time()*1000)
 
 
@@ -186,7 +186,7 @@ def dnsQueryLoop():
         for i in range(100):
             ipList = _dnsQuery('twitter.com',['8.8.8.234','8.8.8.123',])
             for ip in ipList:
-                logging.debug(u'[DNS]采集到远程异常IP(%s)。'%ip)
+                logging.info(u'[DNS]采集到远程异常IP(%s)。'%ip)
                 _errIP[ip] = int(time.time()*1000)
             if i%10 == 0:
                 errIP.clear()
@@ -227,17 +227,22 @@ class SClient:
 
         # 获得请求并发出新的请求。
         (ver,) = self.unpack('B')
-        if ver ==0x05:
+        if ver == 0x04:
+            # socks4 协议
+            logging.debug('[客户端] 协议错误，TcpRoute 不支持 socks4 协议。')
+            # socks4 拒绝转发回应。
+            self.pack('BBIH',0,0x5b,0,0)
+        elif ver ==0x05:
             # socks5 协议
             logging.debug('Receive socks5 protocol header')
             self.socks5Handle(ver)
         elif chr(ver) in 'GgPpHhDdTtCcOo':
             # 误被当作 http 代理
-            logging.error('Receive http header')
+            logging.error('[客户端] 协议错误，TcpRoute 不支持 http 代理协议。请修改浏览器配置，将代理服务器类型改为 socks5 。')
             self.httpHandle(ver)
         else:
             # 未知的类型，以 socks5 协议拒绝
-            logging.warn('Receive an unknown protocol header')
+            logging.error('[客户端] 未知的协议，连接关闭。')
             self.pack('BB',0x05,0xff)
 
     def isConnected(self):
@@ -332,6 +337,8 @@ Content-Type:text/html; charset=utf-8
 
 <h1>http proxy is not supported</h1>
 http proxy is not supported, only support socks5.''')
+        # 必须等待
+        # 立刻关闭浏览器显示 ERR_CONNECTION_RESET 错误(chrome 测试)
         gevent.sleep(5)
         self.conn.close()
 
@@ -409,6 +416,14 @@ class DirectProxy():
         except Exception as e :
             if e.errno == 9:
                 # 另一个协程关闭了链接。
+                pass
+            elif e.errno == 10053:
+                # 远端关闭了连接
+                logging.debug(u'远端关闭了连接。')
+                pass
+            elif e.errno == 10054:
+                # 远端重置了连接
+                logging.debug(u'远端重置了连接。')
                 pass
             else:
                 logging.exception('DirectProxy.__forwardData')
@@ -547,6 +562,14 @@ class Socks5Proxy():
         except Exception as e :
             if e.errno ==9:
                 # 另一个协程关闭了链接。
+                pass
+            elif e.errno == 10053:
+                # 远端关闭了连接
+                logging.debug(u'远端关闭了连接。')
+                pass
+            elif e.errno == 10054:
+                # 远端重置了连接
+                logging.debug(u'远端重置了连接。')
                 pass
             else:
                 logging.exception('socks5Proxy.__forwardData')
