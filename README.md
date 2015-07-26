@@ -36,7 +36,7 @@ config.json 为配置文件，json格式。
 }
 ```
 
-port 为对外提供 socks4 服务的端口。目前只支持 socks5 无密码 协议。浏览器等填写 127.0.0.1 端口填写这个端口号，协议选择 socks5 即可。
+port 为对外提供 socks5 服务的端口。目前只支持 socks5 无密码 协议。浏览器等代理服务器填写 127.0.0.1 ，端口填写这个端口号，协议选择 socks5 即可。
 
 nameservers 、nameserversBackup 为DNS解析服务器地址，在 nameservers 解析出错时会启用 nameserversBackup 解析。
 支持过滤域名纠错，支持过滤部分DNS欺骗，在 nameservers 解析错误后会尝试 TCP DNS协议。
@@ -46,7 +46,7 @@ nameservers 、nameserversBackup 为DNS解析服务器地址，在 nameservers �
 * "8.8.8.8"  使用 "8.8.8.8" 解析
 * ["8.8.8.8","208.67.222.222"]   使用两个服务器进行解析
 
-proxyList 为使用上级代理服务器列表，目前只支持 socks5 协议。比如要是配合 shadowsocks-csharp 的使用时端口应填写 shadowsocks-csharp 的代理端口。
+proxyList 为使用上级代理服务器列表，目前只支持 socks5 代理服务器。比如要是配合 shadowsocks-csharp 的使用时端口应填写 shadowsocks-csharp 的代理端口。
 
 TcpRoute 会同时尝试使用直连及所有的代理服务器建立连接，最终使用最快建立连接的线路。
 
