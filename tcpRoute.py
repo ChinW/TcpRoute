@@ -320,7 +320,7 @@ class SClient:
             for proxy in self.server.getProxy():
                 # 启动多个代理进行转发尝试
                 # 最先成功的会执行转发，之后成功的会自动退出。
-                group.add(gevent.spawn(proxy.forward,self,atyp,hostname,port,30))
+                group.add(gevent.spawn(proxy.forward,self,atyp,hostname,port,10))
             group.join()
         if not self.connected:
             logging.info(u'[SClient]无法连接到目的主机，关闭连接。 hostname=%s ，port=%s '%(hostname,port))
