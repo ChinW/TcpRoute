@@ -4,6 +4,17 @@ TcpRoute, TCP 层的路由器。对于 TCP 连接自动从多个线路、多个�
 
 通过 socks5 代理服务器提供服务。目前支持直连及 socks5 代理线路。
 
+## 重要通知！！！
+
+shadowsocks-windows 在收到代理请求后会立刻回复到目标网站的连接已建立，而不是真实的建立到目标网站的连接后在回复，造成测速结果比直连还快。
+
+目前做了一个修改版的 shadowsocks-windows ，尝试纠正这个问题。但是由于 ss 协议本身的限制，本地无法无污染的获得 ss 服务器到目标网站的速度，所以测速结果还是有些不准确。
+
+源码地址：https://github.com/GameXG/shadowsocks-windows/commit/50309a0fe358245dfbd0d9d5fb2d66654dba8cee
+
+二进制格式下载：http://www.chenwang.net/2015/07/27/shadowsocks-windows-%E4%BF%AE%E6%94%B9%E7%89%88/
+
+
 ## windows 安装
 
 有二进制文件发布，直接下载 dist/tcpRoute.exe 、dist/config 修改配置并执行即可。
