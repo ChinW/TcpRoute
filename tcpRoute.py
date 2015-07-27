@@ -213,6 +213,8 @@ class SClient:
         self.sAddress = address
         self.connected = False
 
+        self.conn.setsockopt(socket.IPPROTO_TCP,socket.TCP_NODELAY, 1)
+
     def unpack(self, fmt):
         length = struct.calcsize(fmt)
         data = self.conn.recv(length)
@@ -373,6 +375,7 @@ class DirectProxy():
         startTime = int(time.time()*1000)
         try:
             s = socket.create_connection(addr,timeout)
+            s.setsockopt(socket.IPPROTO_TCP,socket.TCP_NODELAY, 1)
         except:
             #TODO: 处理下连接失败
             info = traceback.format_exc()
@@ -482,6 +485,11 @@ class Socks5Proxy():
             logging.warn('%s\r\n\r\n'%info)
 
             return
+
+        s.setsockopt(socket.IPPROTO_TCP,socket.TCP_NODELAY, 1)
+        s.settimeout(timeout)
+        sClient.conn.settimeout(timeout)
+
         tcpping = int(time.time()*1000)-startTime
         logging.debug(u'[socks5] 远程代理服务器已连接  host:%s ,port:%s ,timeout:%s,time:%s'%(self.host,self.port,timeout,tcpping))
 
@@ -532,6 +540,7 @@ class Socks5Proxy():
         elif atyp == 0x04:
             Socks5Proxy.unpack(s,'!2QH')
 
+        gevent.sleep(0)
         # 直连的话连接建立就可以了
         # 如果是 socks5 代理，时间统计需要包含远端代理服务器连接到远端服务器的时间。
         tcpping = int(time.time()*1000)-startTime
