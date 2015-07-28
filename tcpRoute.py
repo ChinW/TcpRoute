@@ -391,9 +391,9 @@ class DirectProxy():
             logging.debug(u'[DirectProxy] Connection hit (hostname=%s,ip=%s,port=%s,timeout=%s, tcpping=%s)'%(hostname,ip,port,timeout,tcpping))
             sClient.connected=True
 
-            # 为了应付长连接推送，超时设置的长点。
-            s.settimeout(10*60)
-            sClient.conn.settimeout(10*60)
+            # 为了应付长连接，超时设置的长点。
+            s.settimeout(3*60)
+            sClient.conn.settimeout(3*60)
 
             #TODO: 按照socks5协议，这里应该返回服务器绑定的地址及端口
             # http://blog.csdn.net/testcs_dn/article/details/7915505
@@ -551,9 +551,9 @@ class Socks5Proxy():
 
             sClient.connected=True
 
-            # 为了应付长连接推送，超时设置的长点。
-            s.settimeout(10*60)
-            sClient.conn.settimeout(10*60)
+            # 为了应付长连接，超时设置的长点。
+            s.settimeout(3*60)
+            sClient.conn.settimeout(3*60)
 
             #TODO: 按照socks5协议，这里应该返回服务器绑定的地址及端口
             # http://blog.csdn.net/testcs_dn/article/details/7915505
