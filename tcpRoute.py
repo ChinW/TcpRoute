@@ -683,6 +683,13 @@ class SocksServer(StreamServer):
             if not configIpBlacklist:
                 logging.info(u'[config]不存在静态配置ip黑名单。')
 
+            logLevel = config.get('logLevel',"INFO")
+            logLevel = logging.getLevelName(logLevel.strip().upper())
+            if isinstance(logLevel,(str,unicode)):
+                logLevel = logging.INFO
+                logging.warn(u'错误的日志级别 %s ，重置为 INFO。'%config.get('logLevel',''))
+            logging.getLogger().setLevel(logLevel)
+
 
             try:
                 nameservers = config['nameservers']
