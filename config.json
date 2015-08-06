@@ -3,7 +3,7 @@
   "port":7070,
   "nameservers":"system",
   "nameserversBackup":["8.8.8.8","8.8.4.4","208.67.222.222","208.67.220.220"],
-  "proxyList":[
+  "upstream_list":[
                   {
                       "type":"socks5",
                       "host":"127.0.0.1",

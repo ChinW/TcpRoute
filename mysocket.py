@@ -19,6 +19,8 @@ except ImportError:
 
 class FileObject(_fileobject):
     u'''
+不建议使用了，MySocket 已经实现了 FileObject 的大部分功能。
+
 注意：在使用 readline 并且 bufsize > 1 时，会使用缓冲区，并且会多读数据存放到缓冲区。
 C:/Python27/Lib/socket.py:447
 意味着如果使用了 readline ，并且 bufsize >1 ，之后的读操作必须继续使用本类的read、readline 等函数，否则有可能丢失数据！！
@@ -186,13 +188,21 @@ size 尝试读取的最大长度。
         u'''复位预读指针'''
         self.peek_data.seek(0)
 
-    def unpack(self, fmt):
+    def unpack(self, fmt,block = True):
+        u'''解包
+
+block 是否阻塞
+    即使非阻塞模式是标准的 recv ，也会阻塞。
+    阻塞模式会完全阻塞，直到连接关闭或连接超时。
+'''
         length = struct.calcsize(fmt)
-        data = self.recv(length)
+        if block:
+            data = self.read(length)
+        else:
+            data = self.recv(length)
         if len(data) < length:
             raise Exception("SClient.unpack: bad formatted stream")
         return struct.unpack(fmt, data)
-
 
     def pack(self, fmt, *args):
         data = struct.pack(fmt, *args)
@@ -206,9 +216,11 @@ size 尝试读取的最大长度。
         return self.sock.fileno()
 
     def makefile(self,mode='rb', bufsize=-1, close=False):
+        u'''不建议使用了，自身已经实现了 makefile 的大部分功能。'''
         return FileObject(self,mode,bufsize,close)
 
     def shutdown(self,how):
         self.sock.shutdown(how)
 
-
+    def flush(self):
+        pass
