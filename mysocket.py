@@ -6,6 +6,9 @@ from socket import _fileobject, EINTR, error
 import traceback
 from gevent import socket
 import struct
+import gevent
+import time
+import math
 
 try:
     from io import BytesIO
@@ -16,7 +19,6 @@ except ImportError:
         from StringIO import StringIO as BytesIO
 
 
-
 class FileObject(_fileobject):
     u'''
 不建议使用了，MySocket 已经实现了 FileObject 的大部分功能。
@@ -25,6 +27,7 @@ class FileObject(_fileobject):
 C:/Python27/Lib/socket.py:447
 意味着如果使用了 readline ，并且 bufsize >1 ，之后的读操作必须继续使用本类的read、readline 等函数，否则有可能丢失数据！！
 '''
+
     def unpack(self, fmt):
         length = struct.calcsize(fmt)
         data = self.recv(length)
@@ -36,17 +39,18 @@ C:/Python27/Lib/socket.py:447
         data = struct.pack(fmt, *args)
         return self.sendall(data)
 
-    def recv(self,size):
+    def recv(self, size):
         return self.read(size)
 
-    def sendall(self,data):
+    def sendall(self, data):
         return self.write(data)
 
 
 class MySocket:
     u'''预读缓冲区
 '''
-    def __init__(self,sock,peek=True):
+
+    def __init__(self, sock, peek=True):
         self.sock = sock
         self.peek = peek
         # 缓冲区开头为启用 peek 的位置
@@ -56,23 +60,25 @@ class MySocket:
         #
         self.peek_data = BytesIO()
 
-    def recv(self,size):
+    def recv(self, size):
         u'''读数据，在读不够指定 size 数据时也会返回。
 完全无数据时会阻塞(缓冲区数据量不够，并且源无数据时也会阻塞)。
 超时会引发超时异常。
 如果有缓存的数据，就会忽略所有的异常。
+虽然正常操作系统在连接异常时会直接抛弃缓冲区的内容，不过我这里还是先处理完缓冲区的内容再引发异常吧。
+
 '''
         # 先读缓冲区
         offset = self.peek_data.tell()
         res = self.peek_data.read(size)
 
-        assert len(res) <= size ,u'read 错误，读了比预期多的数据。'
+        assert len(res) <= size, u'read 错误，读了比预期多的数据。'
 
-        if len(res)<size:
+        if len(res) < size:
             # 数据不够时从 sock 读取
             data = b''
             try:
-                data = self.sock.recv(size-len(res))
+                data = self.sock.recv(size - len(res))
             except error, e:
                 if (not res) and e.errno != EINTR:
                     # 没有预读数据并且不是 EINTR 异常
@@ -81,7 +87,7 @@ class MySocket:
                     # 如果存在缓存数据，忽略异常，直接返回缓存的部分数据
                     info = traceback.format_exc()
                     logging.debug(u'[MySocket]recv 读取异常，存在缓冲区数据，忽略异常。')
-                    logging.debug('%s\r\n\r\n'%info)
+                    logging.debug('%s\r\n\r\n' % info)
             finally:
                 self.peek_data.write(data)
                 self.peek_data.seek(offset)
@@ -99,7 +105,7 @@ class MySocket:
             self.peek_data.write(old_peek_data.read())
             self.peek_data.seek(0)
 
-    def read(self,size):
+    def read(self, size):
         u'''读数据（完全阻塞）
 
 在不够 size 时会不断尝试读取，直到数据足够或超时。
@@ -113,7 +119,7 @@ class MySocket:
             offset = self.peek_data.tell()
             res = self.peek_data.read(size)
 
-            assert len(res) <= size ,u'read 错误，读了比预期多的数据。'
+            assert len(res) <= size, u'read 错误，读了比预期多的数据。'
 
             if len(res) == size or is_end:
                 # 读够 size 或 读不到数据(连接关闭)
@@ -122,7 +128,7 @@ class MySocket:
             elif len(res) < size:
                 data = b''
                 try:
-                    data = self.sock.recv(size-len(res))
+                    data = self.sock.recv(size - len(res))
                 except error as e:
                     if e.errno == EINTR:
                         continue
@@ -134,8 +140,7 @@ class MySocket:
                     # 如果读到结尾(data == b'')
                     is_end = True
 
-
-    def readline(self,size):
+    def readline(self, size):
         u'''读一行数据(完全阻塞)
 
 size 尝试读取的最大长度。
@@ -150,15 +155,15 @@ size 尝试读取的最大长度。
             offset = self.peek_data.tell()
             res = self.peek_data.readline(size)
 
-            assert len(res)<=size, u'readline 错误，读了比预期多的数据。'
+            assert len(res) <= size, u'readline 错误，读了比预期多的数据。'
 
             if res[-1] == '\n' or len(res) == size or is_end:
                 self._clear_peek_data()
                 return res
-            elif len(res)<size:
+            elif len(res) < size:
                 data = b''
                 try:
-                    data = self.sock.recv(size-len(res))
+                    data = self.sock.recv(size - len(res))
                 except error as e:
                     if e.errno == EINTR:
                         continue
@@ -171,11 +176,10 @@ size 尝试读取的最大长度。
                     # 如果读到结尾(data == b'')
                     is_end = True
 
-
-    def sendall(self,data):
+    def sendall(self, data):
         return self.sock.sendall(data)
 
-    def set_peek(self,value):
+    def set_peek(self, value):
         u'''开关预读'''
         if self.peek == False and value == True:
             new = BytesIO()
@@ -188,7 +192,7 @@ size 尝试读取的最大长度。
         u'''复位预读指针'''
         self.peek_data.seek(0)
 
-    def unpack(self, fmt,block = True):
+    def unpack(self, fmt, block=True):
         u'''解包
 
 block 是否阻塞
@@ -208,18 +212,68 @@ block 是否阻塞
         data = struct.pack(fmt, *args)
         return self.sendall(data)
 
-    def close(self):
+    def setblocking(self, flag):
+        return self.sock.setblocking(flag)
+
+    def settimeout(self, howlong):
+        return self.sock.settimeout(howlong)
+
+    def close(self, safe=True, timeout=5, sleep='read'):
+        u''' 关闭
+
+if sleep == 'read':
+    shutdown
+    设置读超时为 timeout
+    循环读
+    读到结尾在关闭连接
+sleep = gevent.sleep
+    shutdown
+    sleep(timeout)
+    close()
+        '''
         self.peek_data = BytesIO()
+
+        if safe:
+            try:
+                self.shutdown(socket.SHUT_WR)
+
+                if sleep == 'read':
+                    end = time.time() + timeout
+                    self.setblocking(1)
+                    while True:
+                        timeout = math.ceil(end - time.time())
+                        if timeout <= 0:
+                            break
+                        self.sock.settimeout(timeout)
+                        data = self.recv(2048)
+                        if not data:
+                            break
+
+                elif callable(self):
+                    sleep(timeout)
+
+                else:
+                    raise ValueError()
+                    # 正常操作是先关闭写通道
+                    # 等待对方关闭对方的写通道(既本机的读通道)(会读到空表示关闭了)
+                    # 双向流都关闭了后在 close 连接。
+            except:
+                pass
+            finally:
+                try:
+                    return self.close()
+                except:
+                    pass
         return self.sock.close()
 
     def fileno(self):
         return self.sock.fileno()
 
-    def makefile(self,mode='rb', bufsize=-1, close=False):
+    def makefile(self, mode='rb', bufsize=-1, close=False):
         u'''不建议使用了，自身已经实现了 makefile 的大部分功能。'''
-        return FileObject(self,mode,bufsize,close)
+        return FileObject(self, mode, bufsize, close)
 
-    def shutdown(self,how):
+    def shutdown(self, how):
         self.sock.shutdown(how)
 
     def flush(self):

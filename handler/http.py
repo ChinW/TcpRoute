@@ -8,51 +8,46 @@ import urlparse
 from gevent import socket
 from handler.base import HandlerBase
 
-HTTP_METHOD = ('GET','HEAD','PUT','POST','TRACE','OPTIONS','DELETE','CONNECT')
+HTTP_METHOD = ('GET', 'HEAD', 'PUT', 'POST', 'TRACE', 'OPTIONS', 'DELETE', 'CONNECT')
 
 
 class HttpHandler(HandlerBase):
     u'''http 代理协议'''
-    rbufsize = -1
-    wbufsize = 0
 
-    def __init__(self,sock):
-        super(HttpHandler,self).__init__(sock)
-        self.sock = self.sock.makefile('rb', HttpHandler.rbufsize)
-        self.sock = self.sock.makefile('wb', HttpHandler.wbufsize)
+    def __init__(self, sock):
+        super(HttpHandler, self).__init__(sock)
 
     def handler(self):
         self.handle_one_request()
-
 
     def handle_one_request(self):
         if not self.parse_request():
             self.sock.shutdown(socket.SHUT_WR)
             self.sock.close()
             return
-        self.send_error(200,'%s %s %s %s'%(self.command,self.path,self.request_version,self.host))
+        self.send_error(200, '%s %s %s %s' % (self.command, self.path, self.request_version, self.host))
         self.sock.shutdown(socket.SHUT_WR)
         self.sock.close()
 
     def parse_request(self):
         self.command = ''
         self.request_version = "HTTP/0.9"
-        self.path= ''
-        self.host = ''   # 包含主机名及端口号
+        self.path = ''
+        self.host = ''  # 包含主机名及端口号
         self.close_connection = True
         self.scheme = 'http'
 
         raw_requestline = self.sock.readline(65537)
-        if len(raw_requestline) >  65536:
-            #TODO: 过长
+        if len(raw_requestline) > 65536:
+            # TODO: 过长
             raise Exception()
         raw_requestline = raw_requestline.rstrip('\r\n')
         words = raw_requestline.split()
         if len(words) == 2:
             # http 0.9
-            self.command,self.path = words
+            self.command, self.path = words
             if self.command != 'GET':
-                self.send_error(400,"Bad HTTP/0.9 request type (%r)" % self.command)
+                self.send_error(400, "Bad HTTP/0.9 request type (%r)" % self.command)
                 return False
         elif len(words) == 3:
             self.command, self.path, self.request_version = words
@@ -70,23 +65,22 @@ class HttpHandler(HandlerBase):
 
             self.version_number = [int(i) for i in self.version_number]
 
-            if self.version_number >=(1,1):
+            if self.version_number >= (1, 1):
                 # http 1.1 默认打开 持久连接
                 self.close_connection = False
 
-            if self.version_number >=(2,0):
+            if self.version_number >= (2, 0):
                 self.send_error(505, "Bad request version (%r)" % self.request_version)
                 return False
         else:
             self.send_error(400, "Bad request syntax (%r)" % raw_requestline)
             return False
 
-
         self.headers = self.MessageClass(self.sock, 0)
 
-        #TODO: 作为代理时需要删除 Connection 指定的头
-        conntype = self.headers.get('Connection','')
-        conntype = self.headers.get('Proxy-Connection',conntype)
+        # TODO: 作为代理时需要删除 Connection 指定的头
+        conntype = self.headers.get('Connection', '')
+        conntype = self.headers.get('Proxy-Connection', conntype)
 
         if self.headers.has_key('Connection'):
             del self.headers['Connection']
@@ -98,13 +92,13 @@ class HttpHandler(HandlerBase):
         elif conntype.lower() == 'keep-alive':
             self.close_connection = False
 
-        self.host = self.headers.get('Host',None)
+        self.host = self.headers.get('Host', None)
 
         # 处理 path 携带 host 的情况，例如 GET http://www.163.com/ HTTP/1.1
         self.urlparse = urlparse.urlparse(self.path)
         if self.urlparse.hostname:
             self.host = self.urlparse.hostname
-            self.path = '%s?%s'%(self.urlparse.path,self.urlparse.query)
+            self.path = '%s?%s' % (self.urlparse.path, self.urlparse.query)
         if self.urlparse.scheme:
             self.scheme = self.urlparse.scheme
 
@@ -113,13 +107,10 @@ class HttpHandler(HandlerBase):
 
         return True
 
-
-
-
-    def send_error(self,code, message=None):
+    def send_error(self, code, message=None):
         self.close_connection = True
 
-        short,long = HttpHandler.responses.get(code,('???',message))
+        short, long = HttpHandler.responses.get(code, ('???', message))
         if message is None:
             message = long
 
@@ -127,11 +118,10 @@ class HttpHandler(HandlerBase):
                    {'code': code, 'message': _quote_html(message), 'short': short})
 
         if self.request_version != "HTTP/0.9":
-            self.sock.write('%s %s %s\r\n'%(self.request_version,code,short))
+            self.sock.write('%s %s %s\r\n' % (self.request_version, code, short))
             self.sock.write('Content-Type:text/html; charset=UTF-8\r\n')
             self.sock.write('Connection: close\r\n\r\n')
         self.sock.write(content.encode('utf-8'))
-
 
     @staticmethod
     def create(sock):
@@ -151,11 +141,10 @@ class HttpHandler(HandlerBase):
             data = data.upper()
 
             for m in HTTP_METHOD:
-                if data.startswith('%s '%m):
+                if data.startswith('%s ' % m):
                     # 是 http 请求
-                    return (HttpHandler(sock),True)
-        return (None,True)
-
+                    return (HttpHandler(sock), True)
+        return (None, True)
 
     responses = {
         100: ('Continue', 'Request received, please continue'),
@@ -197,7 +186,7 @@ class HttpHandler(HandlerBase):
               'Specified method is invalid for this resource.'),
         406: ('Not Acceptable', 'URI not available in preferred format.'),
         407: ('Proxy Authentication Required', 'You must authenticate with '
-              'this proxy before proceeding.'),
+                                               'this proxy before proceeding.'),
         408: ('Request Timeout', 'Request timed out; try again later.'),
         409: ('Conflict', 'Request conflict.'),
         410: ('Gone',
@@ -221,7 +210,7 @@ class HttpHandler(HandlerBase):
         504: ('Gateway Timeout',
               'The gateway server did not receive a timely response'),
         505: ('HTTP Version Not Supported', 'Cannot fulfill request.'),
-        }
+    }
 
     MESSAGE = u"""\
 <head>
