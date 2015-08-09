@@ -12,7 +12,7 @@ class HandlerBase(object):
         pass
 
     @staticmethod
-    def create(sock,server):
+    def create(sock,):
         u'''创建handler
 
 返回值
