@@ -19,31 +19,6 @@ except ImportError:
         from StringIO import StringIO as BytesIO
 
 
-class FileObject(_fileobject):
-    u'''
-不建议使用了，MySocket 已经实现了 FileObject 的大部分功能。
-
-注意：在使用 readline 并且 bufsize > 1 时，会使用缓冲区，并且会多读数据存放到缓冲区。
-C:/Python27/Lib/socket.py:447
-意味着如果使用了 readline ，并且 bufsize >1 ，之后的读操作必须继续使用本类的read、readline 等函数，否则有可能丢失数据！！
-'''
-
-    def unpack(self, fmt):
-        length = struct.calcsize(fmt)
-        data = self.recv(length)
-        if len(data) < length:
-            raise Exception("[FileObject].unpack: bad formatted stream")
-        return struct.unpack(fmt, data)
-
-    def pack(self, fmt, *args):
-        data = struct.pack(fmt, *args)
-        return self.sendall(data)
-
-    def recv(self, size):
-        return self.read(size)
-
-    def sendall(self, data):
-        return self.write(data)
 
 
 class SocketBase:
@@ -502,10 +477,6 @@ sleep = gevent.sleep
 
     def fileno(self):
         return self.sock.fileno()
-
-    def makefile(self, mode='rb', bufsize=-1, close=False):
-        u'''不建议使用了，自身已经实现了 makefile 的大部分功能。'''
-        return FileObject(self, mode, bufsize, close)
 
     def shutdown(self, how):
         self.sock.shutdown(how)
