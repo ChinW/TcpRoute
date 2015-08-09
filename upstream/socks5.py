@@ -124,5 +124,9 @@ class Socks5Upstream(UpstreamBase):
         _sock.settimeout(data_timeout)
         return self.socket(_sock=_sock)
 
+
+    def get_display_name(self):
+        return '[%s]socks5_hostname=%s,socks5_port=%s' % (self.type,self.socks5_hostname, self.socks5_port)
+
     def get_name(self):
-        return '%s-%s:%s' % (self.type, self.socks5_hostname, self.socks5_port)
+        return '%s?socks5_hostname=%s&socks5_port=%s' % (self.type,self.socks5_hostname, self.socks5_port)

@@ -38,6 +38,12 @@ class DirectUpstream(UpstreamBase):
 
         self.socket = socket
 
+    def get_display_name(self):
+        return '[%s]source_ip=%s,source_port=%s' % (self.type,self.source_ip,self.source_port)
+
+    def get_name(self):
+        return '%s?source_ip=%s&source_port=%s' % (self.type,self.source_ip,self.source_port)
+
     def create_connection(self,address, timeout=10, data_timeout = 5*60):
         # TODO: 这里需要记录下本sock连接远程的耗时。
         # TODO: 需要实现多ip同时连接的功能。

@@ -63,4 +63,8 @@ class MultipathUpstream(UpstreamBase):
         else:
             raise UpstreamConnectError()
 
+    def get_display_name(self):
+        return '[%s]' % (self.type)
 
+    def get_name(self):
+        return '%s' % (self.type)
