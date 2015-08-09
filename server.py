@@ -10,7 +10,6 @@ from gevent.server import StreamServer
 import sys
 import signal
 from LRUCacheDict import LRUCacheDict
-from dispatch import Dispatch
 import handler
 from mysocket import MySocket
 import upstream
@@ -35,7 +34,6 @@ class Server(StreamServer):
         self.config = config
         self.routeCache = LRUCacheDict(500, 10 * 60 * 1000)
         self.upstream = None
-        self.dispatch = Dispatch(self)
 
         listener = ("0.0.0.0", config.get("port", 7070))
         StreamServer.__init__(self, listener, backlog=1024, )
