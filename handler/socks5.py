@@ -7,7 +7,7 @@ import struct
 import gevent
 import math
 from gevent.pool import Group
-from handler.base import HandlerBase, HandlerPipeTcpBase
+from handler.base import HandlerBase
 
 # 悲剧，windows python 3.4 才支持 ipv6 的 inet_ntop
 # https://bugs.python.org/issue7171
@@ -133,37 +133,6 @@ class Socks5Handler(HandlerBase):
             s.close()
             d.close()
 
-    # Pipe 部分
-    def pipe_on_remote_connect_ok(self):
-        # 为了应付长连接，超时设置的长点。
-        self.sock.settimeout(3 * 60)
-        if self.ver == 0x04:
-            raise NotImplementedError()
-        elif self.ver == 0x05:
-            # TODO: 按照socks5协议，这里应该返回服务器绑定的地址及端口
-            # http://blog.csdn.net/testcs_dn/article/details/7915505
-            self.sock.pack('!BBBBIH', 0x05, 0x00, 0x00, 0x01, 0, 0)
-        else:
-            assert False
-
-    def pipe_on_remote_connect_err(self):
-        if self.ver == 0x04:
-            raise NotImplementedError()
-        elif self.ver == 0x05:
-            # TODO: 按照socks5协议，这里应该返回服务器绑定的地址及端口
-            # http://blog.csdn.net/testcs_dn/article/details/7915505
-            self.sock.pack('!BBBBIH', 0x05, 0x03, 0x00, 0x01, 0, 0)
-        else:
-            assert False
-
-    def pipe_recv(self, size):
-        return self.sock.recv(size)
-
-    def pipe_sendall(self, data):
-        return self.sock.sendall(data)
-
-    def pipe_close(self, safe=True, timeout=5, sleep='read'):
-        return self.sock.close(safe, timeout, sleep)
 
     @staticmethod
     def create(sock,server):

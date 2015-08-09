@@ -33,6 +33,7 @@ class HandlerBase(object):
     def close(self):
         self.sock.close()
 
+u'''
 class HandlerPipeBase():
     u"""管道类
 
@@ -59,11 +60,11 @@ class HandlerPipeBase():
 
 
 #    def on_upstream_connected(self):
-#        u''' 已连接到要代理 '''
+#        u""" 已连接到要代理 """
 
 #    def on_remote_connected(self):
-#        u''' 已连接到要远端
-#socks5 代理回应客户连接已建立。 '''
+#        u""" 已连接到要远端
+#socks5 代理回应客户连接已建立。 """
 
     # 连接无法建立
 
@@ -131,7 +132,7 @@ class HandlerPipeTcpBase(HandlerPipeBase):
         return HandlerPipeTcpBase.TYPE_TCP
 
     def get_remote_addr(self):
-        u''' 获得远端地址
+        u""" 获得远端地址
 
 即预期的本 pipe 连接的另一侧的地址，调度会根据这个地址确定需要连接的目的地。
 
@@ -142,7 +143,7 @@ class HandlerPipeTcpBase(HandlerPipeBase):
                 IPv4 = 0x01
                 域名 = 0x03
                 IPv6 = 0x04
-'''
+"""
         return ('host',80,'atyp')
 
     def on_remote_connect_ok(self):
@@ -156,3 +157,4 @@ class HandlerPipeTcpBase(HandlerPipeBase):
         pass
     def close(self):
         pass
+'''
