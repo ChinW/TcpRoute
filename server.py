@@ -5,14 +5,26 @@ import json
 import logging
 import os
 import gevent
-from gevent import socket
+from gevent import socket as _socket
 from gevent.server import StreamServer
 import sys
 import signal
 from LRUCacheDict import LRUCacheDict
+from dispatch import Dispatch
 import handler
 from mysocket import MySocket
 import upstream
+
+# 悲剧，windows python 3.4 才支持 ipv6 的 inet_ntop
+# https://bugs.python.org/issue7171
+from upstream.base import ConfigError
+
+if not hasattr(_socket, 'inet_ntop'):
+    import win_inet_pton
+    _socket.inet_ntop = win_inet_pton.inet_ntop
+if not hasattr(_socket, 'inet_pton'):
+    import win_inet_pton
+    _socket.inet_pton = win_inet_pton.inet_pton
 
 logging.basicConfig(level=logging.INFO)
 basedir = os.path.dirname(os.path.abspath(__file__))
@@ -20,24 +32,23 @@ basedir = os.path.dirname(os.path.abspath(__file__))
 
 class Server(StreamServer):
     def __init__(self, config):
+        self.config = config
+        self.routeCache = LRUCacheDict(500, 10 * 60 * 1000)
+        self.upstream = None
+        self.dispatch = Dispatch(self)
+
         listener = ("0.0.0.0", config.get("port", 7070))
         StreamServer.__init__(self, listener, backlog=1024, )
 
-        self.routeCache = LRUCacheDict(500, 10 * 60 * 1000)
-        self.upstreuamDict = {}
+        config_upstream = config.get("upstream", {'type':'direct'})
+        type = config_upstream.get('type', None)
+        if type is None:
+            raise ConfigError(u'[upstream]未配置代理类型！详细信息:%s' % config_upstream)
+        Upstream = upstream.get_upstream(type)
+        if Upstream is None:
+            raise ConfigError(u'[upstream]不支持 %s 类型代理！' % type)
 
-        for p in config.get("upstream_list", []):
-            type = p.get('type', None)
-            if type is None:
-                logging.error(u'[upstream]未配置代理类型！详细信息:%s' % p)
-                continue
-            Upstream = upstream.get_upstream(type)
-            if Upstream is None:
-                logging.error(u'[upstream]不支持 %s 类型代理！' % type)
-                continue
-            _upstream = Upstream(p)
-            self.addUpstream(_upstream)
-            logging.info(u'[upstream]已添加 %s 代理。' % _upstream.get_display_name())
+        self.upstream = Upstream(config_upstream)
 
     def addUpstream(self, upstream):
         logging.info('addUpstream %s' % upstream.get_display_name())
@@ -80,12 +91,12 @@ class Server(StreamServer):
 
         for Handler in handler.get_handler():
             mysocket.reset_peek_offset()
-            (_handler, _reset_peek_offset) = Handler.create(mysocket)
+            (_handler, _reset_peek_offset) = Handler.create(mysocket,self)
             if _handler is not None:
                 break
 
         if _handler is None:
-            sock.close(safe=False)
+            mysocket.close(safe=False)
             logging.warn(u'[Handler]收到未识别的协议，关闭连接。')
             return
 
@@ -99,7 +110,7 @@ class Server(StreamServer):
             _handler.handler()
         except:
             logging.exception(u'client.handle()')
-            sock.close(safe=False)
+            mysocket.close(safe=False)
 
     def close(self):
         logging.info('exit')
@@ -133,7 +144,7 @@ class Server(StreamServer):
 
         try:
             server.serve_forever()
-        except socket.error as e:
+        except _socket.error as e:
             if e.errno == 10048:
                 logging.error(u'%s 端口已被使用，程序退出。' % config.get('port', 7070))
                 server.close()

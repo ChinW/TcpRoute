@@ -14,8 +14,8 @@ HTTP_METHOD = ('GET', 'HEAD', 'PUT', 'POST', 'TRACE', 'OPTIONS', 'DELETE', 'CONN
 class HttpHandler(HandlerBase):
     u'''http 代理协议'''
 
-    def __init__(self, sock):
-        super(HttpHandler, self).__init__(sock)
+    def __init__(self, sock, server):
+        HandlerBase.__init__(self,sock,server)
 
     def handler(self):
         self.handle_one_request()
@@ -124,7 +124,7 @@ class HttpHandler(HandlerBase):
         self.sock.write(content.encode('utf-8'))
 
     @staticmethod
-    def create(sock):
+    def create(sock,server):
         u'''创建handler
 如果是本类可处理的协议返回本类实例，否则返回None
 '''
@@ -143,7 +143,7 @@ class HttpHandler(HandlerBase):
             for m in HTTP_METHOD:
                 if data.startswith('%s ' % m):
                     # 是 http 请求
-                    return (HttpHandler(sock), True)
+                    return (HttpHandler(sock,server), True)
         return (None, True)
 
     responses = {

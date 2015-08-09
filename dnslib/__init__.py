@@ -14,8 +14,74 @@ import dns
 from gevent import socket
 import gevent
 import time
+import re
 from LRUCacheDict import lru_cache
 
+
+
+ATYP_IPV4 = 0x01
+ATYP_DOMAINNAME = 0x03
+ATYP_IPV6 = 0x04
+
+
+RE_IPV4_ADDR = re.compile(r'^((25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(25[0-5]|2[0-4]\d|[01]?\d\d?)$')
+RE_IPV6_ADDR = re.compile(r'^\s*((([0-9A-Fa-f]{1,4}:){7}([0-9A-Fa-f]{1,4}|:))|(([0-9A-Fa-f]{1,4}:){6}(:[0-9A-Fa-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){5}(((:[0-9A-Fa-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){4}(((:[0-9A-Fa-f]{1,4}){1,3})|((:[0-9A-Fa-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){3}(((:[0-9A-Fa-f]{1,4}){1,4})|((:[0-9A-Fa-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){2}(((:[0-9A-Fa-f]{1,4}){1,5})|((:[0-9A-Fa-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){1}(((:[0-9A-Fa-f]{1,4}){1,6})|((:[0-9A-Fa-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9A-Fa-f]{1,4}){1,7})|((:[0-9A-Fa-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(%.+)?\s*$')
+
+def get_addr_type(addr):
+    u""" 分析地址类型(IPv4、IPv6、域名)
+>>> get_addr_type('0.0.0.0') == ATYP_IPV4
+True
+>>> get_addr_type('255.255.255.255') == ATYP_IPV4
+True
+>>> get_addr_type('1.1.1.256') == ATYP_IPV4
+False
+>>> get_addr_type('1.1.0') == ATYP_IPV4
+False
+>>> get_addr_type('192.168.1.1') == ATYP_IPV4
+True
+>>> get_addr_type('fe80:0000:0000:0000:0204:61ff:fe9d:f156') == ATYP_IPV6
+True
+>>> get_addr_type('fe80:0:0:0:204:61ff:fe9d:f156') == ATYP_IPV6
+True
+>>> get_addr_type('fe80::204:61ff:fe9d:f156') == ATYP_IPV6
+True
+>>> get_addr_type('fe80:0000:0000:0000:0204:61ff:254.157.241.86') == ATYP_IPV6
+True
+>>> get_addr_type('fe80:0:0:0:0204:61ff:254.157.241.86') == ATYP_IPV6
+True
+>>> get_addr_type('fe80::204:61ff:254.157.241.86') == ATYP_IPV6
+True
+>>> get_addr_type('::1') == ATYP_IPV6
+True
+>>> get_addr_type('fe80::') == ATYP_IPV6
+True
+>>> get_addr_type('2001::') == ATYP_IPV6
+True
+>>> get_addr_type('2001::99999') == ATYP_DOMAINNAME
+True
+>>> get_addr_type('2001:101@192.168.1.1') == ATYP_DOMAINNAME
+True
+>>> get_addr_type('www.google.com') == ATYP_DOMAINNAME
+True
+>>> get_addr_type('abc') == ATYP_DOMAINNAME
+True
+    """
+    if RE_IPV4_ADDR.match(addr):
+        return ATYP_IPV4
+    elif RE_IPV6_ADDR.match(addr):
+        return ATYP_IPV6
+    else:
+        return ATYP_DOMAINNAME
+
+
+
+if __name__ == "__main__":
+    import doctest
+    doctest.testmod()
+
+
+
+u"""
 
 @lru_cache(500,10*60*1000,lock=None)
 def dnsQuery(hostname):
@@ -154,3 +220,4 @@ def dnsQueryLoop():
 
         gevent.sleep(1*60*60)
 
+"""
