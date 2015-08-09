@@ -85,7 +85,7 @@ class Socks5Handler(HandlerBase):
         try:
             remote_sock = self.server.upstream.create_connection((hostname,port),)
         except:
-            logging.exception(u'所有线路连接 tcp host:%s port:%s 失败。')
+            logging.exception(u'所有线路连接 tcp host:%s port:%s 失败。'%(hostname,port))
             # TODO: 按照socks5协议，这里应该返回服务器绑定的地址及端口
             # http://blog.csdn.net/testcs_dn/article/details/7915505
             self.sock.pack('!BBBBIH', 0x05, 0x03, 0x00, 0x01, 0, 0)

@@ -48,8 +48,7 @@ class Socks5Upstream(UpstreamBase):
         port = address[1]
 
         try:
-            _sock = self.upstream.create_connection((self.socks5_hostname, self.socks5_port), timeout,
-                                                    )
+            _sock = self.upstream.create_connection((self.socks5_hostname, self.socks5_port), timeout,)
         except:
             info = traceback.format_exc()
             tcpping = int(time.time() * 1000) - startTime
