@@ -1,6 +1,8 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 # utf-8 中文编码
+import logging
+import traceback
 from gevent import socket as _socket
 import gevent
 from gevent.pool import Group
@@ -47,7 +49,13 @@ class MultipathUpstream(UpstreamBase):
 
     def _create_connection(self,ares,upstream, address, timeout=10, data_timeout=5 * 60):
         # 实际连接部分
-        sock = upstream.create_connection(address,timeout,data_timeout)
+        try:
+            sock = upstream.create_connection(address,timeout,data_timeout)
+        except:
+            info = traceback.format_exc()
+            logging.debug(u'[upstream]%s 连接 %s:%s 失败。'%(upstream.get_display_name(),address[0],address[1]))
+            logging.debug('%s\r\n\r\n'%info)
+            return
         # TODO: 更新 tcpping 。
         ares.set(sock)
 
