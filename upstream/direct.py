@@ -22,31 +22,31 @@ class DirectUpstream(UpstreamBase):
         u""" 初始化直连 socket 环境 """
         UpstreamBase.__init__(self,config=config)
 
-        source_ip = config.get('source_ip','0.0.0.0')
-        source_port = config.get('source_port',0)
+        self.source_ip = config.get('source_ip','0.0.0.0')
+        self.source_port = config.get('source_port',0)
 
-        if source_ip == '0.0.0.0' and source_port==0:
+        if self.source_ip == '0.0.0.0' and self.source_port==0:
             self.source_address = None
         else:
-            self.source_address=(source_ip,source_port)
+            self.source_address=(self.source_ip,self.source_port)
 
         class socket(SocketBase):
             def __init__(self, family=_socket.AF_INET, type=_socket.SOCK_STREAM, proto=0,_sock=None):
                 if _sock is None:
                     _sock = socket.upsocket.socket(family=family,type=type,proto=proto)
-                    _sock.bind(source_ip.source_addres)
+                    _sock.bind(self.source_address)
                 SocketBase.__init__(self,_sock)
 
-        socket.source_addres = self.source_address
+        socket.source_address = self.source_address
         socket.upstream = self.upstream
 
         self.socket = socket
 
     def get_display_name(self):
-        return '[%s]source_ip=%s,source_port=%s' % (self.type,self.source_addres[0],self.source_addres[1])
+        return '[%s]source_ip=%s,source_port=%s' % (self.type,self.source_ip,self.source_port)
 
     def get_name(self):
-        return '%s?source=%s&source_port=%s' % (self.type,self.source_addres[0],self.source_addres[1])
+        return '%s?source=%s&source_port=%s' % (self.type,self.source_ip,self.source_port)
 
     def create_connection(self,address, timeout=10):
         # TODO: 这里需要记录下本sock连接远程的耗时。
