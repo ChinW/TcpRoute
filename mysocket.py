@@ -192,38 +192,38 @@ sleep = gevent.sleep
         '''
         self.peek_data = BytesIO()
 
+        if sleep != 'read' and not callable(sleep):
+            raise ValueError()
+
         if safe:
             try:
-                self.shutdown(socket.SHUT_WR)
+                self.sock.shutdown(socket.SHUT_WR)
 
                 if sleep == 'read':
+                    # 正常操作是先关闭写通道
+                    # 等待对方关闭对方的写通道(既本机的读通道)(会读到空表示关闭了)
+                    # 双向流都关闭了后在 close 连接。
                     end = time.time() + timeout
-                    self.setblocking(1)
+                    self.sock.setblocking(1)
                     while True:
                         timeout = math.ceil(end - time.time())
                         if timeout <= 0:
                             break
                         self.sock.settimeout(timeout)
-                        data = self.recv(2048)
+                        data = self.sock.recv(2048)
                         if not data:
                             break
 
                 elif callable(self):
                     sleep(timeout)
-
-                else:
-                    raise ValueError()
-                    # 正常操作是先关闭写通道
-                    # 等待对方关闭对方的写通道(既本机的读通道)(会读到空表示关闭了)
-                    # 双向流都关闭了后在 close 连接。
             except:
                 pass
-            finally:
-                try:
-                    return self.close()
-                except:
-                    pass
-        return self.sock.close()
+
+        try:
+            return self.sock.close()
+        except:
+            pass
+
 
     def fileno(self):
         return self.sock.fileno()
@@ -448,13 +448,13 @@ sleep = gevent.sleep
 
                 if sleep == 'read':
                     end = time.time() + timeout
-                    self.setblocking(1)
+                    self.sock.setblocking(1)
                     while True:
                         timeout = math.ceil(end - time.time())
                         if timeout <= 0:
                             break
                         self.sock.settimeout(timeout)
-                        data = self.recv(2048)
+                        data = self.sock.recv(2048)
                         if not data:
                             break
 
@@ -468,12 +468,12 @@ sleep = gevent.sleep
                     # 双向流都关闭了后在 close 连接。
             except:
                 pass
-            finally:
-                try:
-                    return self.close()
-                except:
-                    pass
-        return self.sock.close()
+
+        try:
+            return self.sock.close()
+        except:
+            pass
+
 
     def fileno(self):
         return self.sock.fileno()
