@@ -96,42 +96,7 @@ class Socks5Handler(HandlerBase):
         # http://blog.csdn.net/testcs_dn/article/details/7915505
         self.sock.pack('!BBBBIH', 0x05, 0x00, 0x00, 0x01, 0, 0)
 
-        try:
-            group = Group()
-            group.add(gevent.spawn(self.__forwardData,self.sock,remote_sock))
-            group.add(gevent.spawn(self.__forwardData,remote_sock,self.sock))
-            group.join()
-        finally:
-            self.sock.close()
-            remote_sock.close()
-
-    def __forwardData(self,s,d):
-        try:
-            while True:
-                data=s.recv(1024)
-                if not data:
-                    break
-                d.sendall(data)
-        except _socket.error as e :
-            if e.errno == 9:
-                # 另一个协程关闭了链接。
-                pass
-            elif e.errno == 10053:
-                # 远端关闭了连接
-                logging.debug(u'远端关闭了连接。')
-                pass
-            elif e.errno == 10054:
-                # 远端重置了连接
-                logging.debug(u'远端重置了连接。')
-                pass
-            else:
-                logging.exception(u'DirectProxy.__forwardData')
-        finally:
-            # 这里 和 socks5 Handle 会重复关闭
-            logging.debug(u'DirectProxy.__forwardData  finally')
-            gevent.sleep(5)
-            s.close()
-            d.close()
+        self.forward(self.sock,remote_sock,5*60)
 
 
     @staticmethod

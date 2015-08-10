@@ -2,6 +2,12 @@
 # -*- coding: utf-8 -*-
 # utf-8 中文编码
 
+import logging
+import gevent
+from gevent import socket as _socket
+from gevent.pool import Group
+import time
+
 
 class HandlerBase(object):
     def __init__(self,sock,server):
@@ -32,6 +38,66 @@ class HandlerBase(object):
 
     def close(self):
         self.sock.close()
+
+    def forward(self,sock,remote_sock,data_timeout=5*60):
+        u"""在两个套接字之间转发数据(阻塞调用)
+
+在转发失败时自动关闭连接。在双向都出现超时的情况下会关闭连接。
+
+未专门处理 shutdown ，单方向 shutdown 时会关闭双向链接。
+
+"""
+        try:
+            o = {
+                # 最后一次转发数据的时间 = int(time()*1000)
+                'forward_data_time':int(time.time()*1000),
+            }
+            sock.settimeout(data_timeout)
+            remote_sock.settimeout(data_timeout)
+
+            group = Group()
+            group.add(gevent.spawn(self.__forwardData,sock,remote_sock,o,data_timeout))
+            group.add(gevent.spawn(self.__forwardData,remote_sock,sock,o,data_timeout))
+            group.join()
+        finally:
+            sock.close()
+            remote_sock.close()
+
+    def __forwardData(self,s,d,o,data_timeout=5*60):
+        # TODO: 这里没有处理单方向关闭连接的情况。
+        try:
+            while True:
+                try:
+                    data=s.recv(1024)
+                    if not data:
+                        break
+                    o['forward_data_time'] = int(time.time()*1000)
+                except _socket.timeout as e:
+                    if o['forward_data_time'] + data_timeout > int(time.time()*1000):
+                        # 解决下慢速下载长时间无上传造成读超时断开连接的问题
+                        continue
+                    raise
+                d.sendall(data)
+        except _socket.error as e :
+            if e.errno == 9:
+                # 另一个协程关闭了链接。
+                pass
+            elif e.errno == 10053:
+                # 远端关闭了连接
+                logging.debug(u'远端关闭了连接。')
+                pass
+            elif e.errno == 10054:
+                # 远端重置了连接
+                logging.debug(u'远端重置了连接。')
+                pass
+            else:
+                logging.exception(u'DirectProxy.__forwardData')
+        finally:
+            # 这里 和 socks5 Handle 会重复关闭
+            logging.debug(u'DirectProxy.__forwardData  finally')
+            gevent.sleep(5)
+            s.close()
+            d.close()
 
 u'''
 class HandlerPipeBase():
