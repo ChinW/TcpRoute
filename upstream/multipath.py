@@ -50,11 +50,11 @@ class MultipathUpstream(UpstreamBase):
 
         self.socket = socket'''
 
-    def _create_connection(self,_upstream,aync_task, address, timeout=10, data_timeout=5 * 60):
+    def _create_connection(self,_upstream,aync_task, address, timeout=10):
         # 实际连接部分
         start_time = int(time.time()*1000)
         try:
-            sock = _upstream.create_connection(address,timeout,data_timeout)
+            sock = _upstream.create_connection(address,timeout)
         except:
             t = int(time.time()*1000) - start_time
             info = traceback.format_exc()
@@ -77,13 +77,13 @@ class MultipathUpstream(UpstreamBase):
         if aync_task.sock is None:
             aync_task.evt.set()
 
-    def create_connection(self, address, timeout=10, data_timeout=5 * 60):
+    def create_connection(self, address, timeout=10):
         evt = Event()
         group = Group()
         aync_task = MultipathAsyncTask(evt,None,group)
 
         for _upstream in self.upstream_dict.values():
-            group.add(gevent.spawn(self._create_connection,_upstream,aync_task,address,timeout,data_timeout))
+            group.add(gevent.spawn(self._create_connection,_upstream,aync_task,address,timeout))
 
         # 所有连接失败时发出通知
         gevent.spawn(self._create_connection_all_end,aync_task)

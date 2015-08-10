@@ -39,11 +39,9 @@ class UpstreamBase(object):
             else:
                 self.upstream = _socket
 
-    def create_connection(self,address, timeout=5,data_timeout=5*60):
+    def create_connection(self,address, timeout=5):
         if timeout == _socket._GLOBAL_DEFAULT_TIMEOUT:
             timeout = 10
-        if data_timeout == _socket._GLOBAL_DEFAULT_TIMEOUT:
-            data_timeout = 5*60
         raise NotImplementedError()
 
     def get_display_name(self):
@@ -72,5 +70,6 @@ class UpstreamProtocolError(UpstreamError):
 class UpstreamConnectError(UpstreamError):
     def __init__(self, *args, **kwargs):
         _socket.error.__init__(self, *args, **kwargs)
+
 
 

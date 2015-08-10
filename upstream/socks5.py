@@ -42,7 +42,7 @@ class Socks5Upstream(UpstreamBase):
 
         self.socket = socket
 
-    def create_connection(self, address, timeout=5, data_timeout=5 * 60):
+    def create_connection(self, address, timeout=5):
         startTime = int(time.time() * 1000)
         hostname = address[0]
         port = address[1]
@@ -55,6 +55,7 @@ class Socks5Upstream(UpstreamBase):
             logging.warn(u'[socks5] 远程代理服务器连接失败！ socks5_hostname:%s ,socks5_port:%s ,timeout:%s,time:%s' % (
                 self.socks5_hostname, self.socks5_port, timeout, tcpping))
             logging.warn('%s\r\n\r\n' % info)
+            raise
             raise
 
         _sock.setsockopt(_socket.IPPROTO_TCP, _socket.TCP_NODELAY, 1)
@@ -120,7 +121,7 @@ class Socks5Upstream(UpstreamBase):
 
         tcpping = int(time.time() * 1000) - startTime
         # TODO: 这里需要记录下本sock连接远程的耗时。
-        _sock.settimeout(data_timeout)
+
         return self.socket(_sock=_sock)
 
 
