@@ -109,20 +109,29 @@ class SocketBase:
                     # 如果读到结尾(data == b'')
                     is_end = True
 
-    def readline(self, size):
+    def readline(self, size=9999999, end = '\n'):
         u'''读一行数据(完全阻塞)
 
 size 尝试读取的最大长度。
 
-直到读到 \n 或达到 size 长度时返回。
+直到读到 end 或达到 size 长度时返回。
 否则会不断尝试读取，直到超时引发异常。
 超时异常不会丢失缓冲区的数据。
 '''
         is_end = False
 
+        if not end:
+            raise ValueError('')
+
         while True:
             offset = self.peek_data.tell()
-            res = self.peek_data.readline(size)
+
+            res  = self.peek_data.read(size)
+            end_position = res.find(end)
+            if end_position >= 0:
+                # 找到结尾
+                res = res[:end_position+len(end)]
+                self.peek_data.seek(end_position+len(end))
 
             assert len(res) <= size, u'readline 错误，读了比预期多的数据。'
 
@@ -349,7 +358,7 @@ class MySocket(SocketBase):
                     # 如果读到结尾(data == b'')
                     is_end = True
 
-    def readline(self, size):
+    def readline(self, size=9999999,end='\n'):
         u'''读一行数据(完全阻塞)
 
 size 尝试读取的最大长度。
@@ -360,9 +369,18 @@ size 尝试读取的最大长度。
 '''
         is_end = False
 
+        if not end:
+            raise ValueError('')
+
         while True:
             offset = self.peek_data.tell()
-            res = self.peek_data.readline(size)
+
+            res = self.peek_data.read(size)
+            end_position = res.find(end)
+            if end_position >= 0:
+                # 找到结尾
+                res = res[:end_position+len(end)]
+                self.peek_data.seek(end_position+len(end))
 
             assert len(res) <= size, u'readline 错误，读了比预期多的数据。'
 
