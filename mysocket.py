@@ -135,7 +135,7 @@ size 尝试读取的最大长度。
 
             assert len(res) <= size, u'readline 错误，读了比预期多的数据。'
 
-            if res[-1] == '\n' or len(res) == size or is_end:
+            if res.endswith(end) or len(res) == size or is_end:
                 self._clear_peek_data()
                 return res
             elif len(res) < size:
@@ -384,7 +384,7 @@ size 尝试读取的最大长度。
 
             assert len(res) <= size, u'readline 错误，读了比预期多的数据。'
 
-            if res[-1] == '\n' or len(res) == size or is_end:
+            if res.endswith(end) or len(res) == size or is_end:
                 self._clear_peek_data()
                 return res
             elif len(res) < size:
