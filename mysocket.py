@@ -413,7 +413,9 @@ block 是否阻塞
             data = self.read(length)
         else:
             data = self.recv(length)
-        if len(data) < length:
+        if len(data) == 0:
+            raise Exception(u'远端关闭了链接。')
+        elif len(data) < length:
             raise Exception("SClient.unpack: bad formatted stream")
         return struct.unpack(fmt, data)
 

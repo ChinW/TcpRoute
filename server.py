@@ -32,7 +32,6 @@ basedir = os.path.dirname(os.path.abspath(__file__))
 class Server(StreamServer):
     def __init__(self, config):
         self.config = config
-        self.routeCache = LRUCacheDict(500, 10 * 60 * 1000)
         self.upstream = None
 
         listener = ("0.0.0.0", config.get("port", 7070))
@@ -58,23 +57,6 @@ class Server(StreamServer):
         else:
             return self.upstreuamDict.values()
 
-    def getProxyCache(self, hostname, port, default=None):
-        return self.routeCache.get('%s-%s' % (hostname, port), default)
-
-    def __setProxyCache(self, hostname, port, value):
-        self.routeCache['%s-%s' % (hostname, port)] = value
-
-    def upProxyPing(self, proxyName, hostname, port, ping, ip):
-        proxyDict = self.getProxyCache(hostname, port)
-        if proxyDict == None:
-            proxyDict = {}
-            self.__setProxyCache(hostname, port, proxyDict)
-
-        proxyDict['%s-%s' % (proxyName, ip)] = {
-            'tcpping': ping,
-            'proxyName': proxyName,
-            'hitIp': ip
-        }
 
     def handle(self, sock, addr):
         logging.debug(u'connection from %s:%s' % addr)
