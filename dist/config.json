@@ -1,13 +1,30 @@
 {
+  "log_level":"DEBUG",
   "port":7070,
   "nameservers":"system",
-  "nameserversBackup":["8.8.8.8","8.8.4.4","208.67.222.222","208.67.220.220"],
-  "proxyList":[
-                  {
-                      "type":"socks5",
-                      "host":"127.0.0.1",
-                      "port":5555
-                  }
-              ],
+  "nameservers_backup":["8.8.8.8","8.8.4.4","208.67.222.222","208.67.220.220"],
+  "upstream":
+  {
+    "type":"multipath",
+    "list":
+    [
+      {
+        "type":"direct",
+        "source_ip":"0.0.0.0",
+        "source_port":0
+      },
+      {
+        "type":"socks5",
+        "host":"127.0.0.1",
+        "port":5555,
+        "upstream":
+        {
+          "type":"direct",
+          "source_ip":"0.0.0.0",
+          "source_port":0
+        }
+      }
+    ]
+  },
   "IpBlacklist":[]
 }

@@ -1,1 +1,1 @@
-pyinstaller -F  tcpRoute.py
+c:\python27\python.exe build.py py2exe
