@@ -18,7 +18,7 @@ class UpstreamBase(object):
         self.type = config.get('type', None)
         self.config = config
 
-        import upstream
+        import upstream as upstream_mod
 
         upconfig = config.get('upstream', None)
 
@@ -27,7 +27,7 @@ class UpstreamBase(object):
             if uptype is None:
                 raise ConfigError(u'[配置错误] upstream 未配置 type ！')
 
-            Upstream = upstream.get_upstream(uptype)
+            Upstream = upstream_mod.get_upstream(uptype)
             if Upstream is None:
                 raise ConfigError(u'[配置错误] upstream type %s 不被支持！' % uptype)
 
@@ -35,7 +35,7 @@ class UpstreamBase(object):
             pass
         else:
             if self.type != 'direct':
-                self.upstream = upstream.get_upstream('direct')({'type':'direct'})
+                self.upstream = upstream_mod.get_upstream('direct')({'type':'direct'})
             else:
                 self.upstream = _socket
 
