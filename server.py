@@ -29,11 +29,9 @@ from upstream.base import ConfigError
 
 if not hasattr(_socket, 'inet_ntop'):
     import win_inet_pton
-
     _socket.inet_ntop = win_inet_pton.inet_ntop
 if not hasattr(_socket, 'inet_pton'):
     import win_inet_pton
-
     _socket.inet_pton = win_inet_pton.inet_pton
 
 logging.basicConfig(level=logging.INFO)
