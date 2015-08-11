@@ -4,15 +4,24 @@
 import json
 import logging
 import os
-import gevent
-from gevent import socket as _socket
-from gevent.server import StreamServer
 import sys
 import signal
-from LRUCacheDict import LRUCacheDict
+
+try:
+    import gevent
+    from gevent import socket as _socket
+    from gevent.server import StreamServer
+    from gevent.pool import Group
+    from gevent.threadpool import ThreadPool
+except:
+    print >>sys.stderr, "please install gevent first!"
+    sys.exit(1)
+
+import dnslib
 import handler
 from mysocket import MySocket
 import upstream
+from LRUCacheDict import LRUCacheDict
 
 # 悲剧，windows python 3.4 才支持 ipv6 的 inet_ntop
 # https://bugs.python.org/issue7171
@@ -20,9 +29,11 @@ from upstream.base import ConfigError
 
 if not hasattr(_socket, 'inet_ntop'):
     import win_inet_pton
+
     _socket.inet_ntop = win_inet_pton.inet_ntop
 if not hasattr(_socket, 'inet_pton'):
     import win_inet_pton
+
     _socket.inet_pton = win_inet_pton.inet_pton
 
 logging.basicConfig(level=logging.INFO)
@@ -37,7 +48,7 @@ class Server(StreamServer):
         listener = ("0.0.0.0", config.get("port", 7070))
         StreamServer.__init__(self, listener, backlog=1024, )
 
-        config_upstream = config.get("upstream", {'type':'direct'})
+        config_upstream = config.get("upstream", {'type': 'direct'})
         type = config_upstream.get('type', None)
         if type is None:
             raise ConfigError(u'[upstream]未配置代理类型！详细信息:%s' % config_upstream)
@@ -57,7 +68,6 @@ class Server(StreamServer):
         else:
             return self.upstreuamDict.values()
 
-
     def handle(self, sock, addr):
         logging.debug(u'connection from %s:%s' % addr)
 
@@ -71,7 +81,7 @@ class Server(StreamServer):
 
         for Handler in handler.get_handler():
             mysocket.reset_peek_offset()
-            (_handler, _reset_peek_offset) = Handler.create(mysocket,self)
+            (_handler, _reset_peek_offset) = Handler.create(mysocket, self)
             if _handler is not None:
                 break
 
@@ -115,10 +125,25 @@ class Server(StreamServer):
 
         logging.getLogger().setLevel(logLevel)
 
+        try:
+            dnslib.nameservers = config['nameservers']
+            dnslib.nameservers_backup = config['nameservers_backup']
+
+            if dnslib.nameservers != 'system' and isinstance(dnslib.nameservers, (str, unicode)):
+                dnslib.nameservers = [dnslib.nameservers, ]
+
+            if dnslib.nameservers_backup != 'system' and isinstance(dnslib.nameservers_backup, (str, unicode)):
+                dnslib.nameservers_backup = [dnslib.nameservers_backup, ]
+
+        except:
+            logging.exception(u'[DNS]DNS服务器配置错误！')
+
         server = Server(config)
 
         gevent.signal(signal.SIGTERM, server.close)
         gevent.signal(signal.SIGINT, server.close)
+
+        gevent.spawn(dnslib.dnsQueryLoop)
 
         logging.info("Server is listening on 0.0.0.0:%d" % config.get('port', 7070))
 
