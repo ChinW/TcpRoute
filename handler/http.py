@@ -98,7 +98,10 @@ class HttpHandler(HandlerBase):
         self.urlparse = urlparse.urlparse(self.path)
         if self.urlparse.hostname:
             self.host = self.urlparse.hostname
-            self.path = '%s?%s' % (self.urlparse.path, self.urlparse.query)
+            if self.urlparse.query:
+                self.path = '%s?%s' % (self.urlparse.path, self.urlparse.query)
+            else:
+                self.path = self.urlparse.path
         if self.urlparse.scheme:
             self.scheme = self.urlparse.scheme
 
