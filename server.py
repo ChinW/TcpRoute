@@ -35,7 +35,12 @@ if not hasattr(_socket, 'inet_pton'):
     _socket.inet_pton = win_inet_pton.inet_pton
 
 logging.basicConfig(level=logging.INFO)
-basedir = os.path.dirname(os.path.abspath(__file__))
+
+try:
+    basedir = os.path.dirname(os.path.abspath(__file__))
+except NameError:  # We are the main py2exe script, not a module
+    import sys
+    basedir = os.path.dirname(os.path.abspath(sys.argv[0]))
 
 
 class Server(StreamServer):
@@ -114,7 +119,7 @@ class Server(StreamServer):
             logging.exception(u'[config]配置错误！。')
             return
 
-        logLevel = config.get('logLevel', "INFO")
+        logLevel = config.get('log_level', "INFO")
         logLevel = logging.getLevelName(logLevel.strip().upper())
 
         if isinstance(logLevel, (str, unicode)):

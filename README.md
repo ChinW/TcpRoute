@@ -33,23 +33,41 @@ config.json 为配置文件，json格式。
 
 ```json
 {
+  "log_level":"INDO",
   "port":7070,
   "nameservers":"system",
-  "nameserversBackup":["8.8.8.8","208.67.222.222"],
-  "proxyList":[
-                  {
-                      "type":"socks5",
-                      "host":"127.0.0.1",
-                      "port":5555
-                  }
-              ],
+  "nameservers_backup":["8.8.8.8","8.8.4.4","208.67.222.222","208.67.220.220"],
+  "upstream":
+  {
+    "type":"multipath",
+    "list":
+    [
+      {
+        "type":"direct",
+        "source_ip":"0.0.0.0",
+        "source_port":0
+      },
+      {
+        "type":"socks5",
+        "host":"127.0.0.1",
+        "port":5555,
+        "upstream":
+        {
+          "type":"direct",
+          "source_ip":"0.0.0.0",
+          "source_port":0
+        }
+      }
+    ]
+  },
   "IpBlacklist":[]
 }
 ```
+"logLevel":"INDO", 为日志级别。一般 INFO 即可，调试时可以使用 DEBUG 。
 
-port 为对外提供 socks5 服务的端口。目前只支持 socks5 无密码 协议。浏览器等代理服务器填写 127.0.0.1 ，端口填写这个端口号，协议选择 socks5 即可。
+port 为对外提供代理服务的端口。目前只支持 socks5 无密码 协议。浏览器等代理服务器填写 127.0.0.1 ，端口填写这个端口号，协议选择 socks5 即可。
 
-nameservers 、nameserversBackup 为DNS解析服务器地址，在 nameservers 解析出错时会启用 nameserversBackup 解析。
+nameservers 、nameservers_backup 为DNS解析服务器地址，在 nameservers 解析出错时会启用 nameserversBackup 解析。
 支持过滤域名纠错，支持过滤部分DNS欺骗，在 nameservers 解析错误后会尝试 TCP DNS协议。
 
 可选的格式：
@@ -57,13 +75,17 @@ nameservers 、nameserversBackup 为DNS解析服务器地址，在 nameservers �
 * "8.8.8.8"  使用 "8.8.8.8" 解析
 * ["8.8.8.8","208.67.222.222"]   使用两个服务器进行解析
 
-proxyList 为使用上级代理服务器列表，目前只支持 socks5 代理服务器。比如要是配合 shadowsocks-csharp 的使用时端口应填写 shadowsocks-csharp 的代理端口。
+upstream 为使用上级代理。支持代理服务器嵌套，多代理自动选择等功能。
 
-TcpRoute 会同时尝试使用直连及所有的代理服务器建立连接，最终使用最快建立连接的线路。
+"type":"multipath", 类型表示本上层代理为多代理聚合，负载均衡策略为对每个连接自动选择最快的线路连接目标网站。"list" 是上层代理服务器列表。
 
-TcpRoute 会缓存检测结果方便下次使用。
+"type":"direct", 表示直连，可以指定源地址。在多线路(电信+联通)时可以通过指定多个源地址配合路由器实现自动选路。
 
-IpBlacklist 为静态 ip 黑名单，黑名单上的ip不会用来建立连接(目前直连线路有效)。一般不需要配置，系统会自动检测异常ip并屏蔽。
+"type":"socks5", 表示 socks5 代理，"host" 、 "port" 为上级代理的地址及端口。
+
+TcpRoute multipath 聚合代理会同时尝试使用直连及所有的代理服务器建立连接，最终使用最快建立连接的线路。TcpRoute 会缓存检测结果方便下次使用。
+
+IpBlacklist 为静态 ip 黑名单，黑名单上的ip不会用来建立连接(目前直连线路使用)。一般不需要配置，系统会自动检测异常ip并屏蔽。
 格式为["123.123.123.123","456.456.456.456"]
 
 
