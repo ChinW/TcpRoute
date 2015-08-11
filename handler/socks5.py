@@ -42,7 +42,39 @@ class Socks5Handler(HandlerBase):
             return
 
     def socks4Handle(self):
-        raise NotImplementedError()
+        cd,port,dstip = self.sock.unpack('!BHI')
+
+        if cd != 1:
+            # 1 == 连接， 2 == 绑定
+            self.sock.pack('!BBHI',0,91,port,dstip)
+            self.sock.close()
+
+        userid = self.sock.readline(end='\0')[:-1]
+
+        hostname = _socket.inet_ntoa(struct.pack('!I', dstip))
+
+        if hostname.startswith('0.0.0.'):
+            # SOCKS4a 支持 ，chrome 不支持 socks4a 扩展。
+            hostname = self.sock.readline(end='\0')[:-1]
+
+        # 对外发起请求
+        try:
+            remote_sock = self.server.upstream.create_connection((hostname,port),)
+        except:
+            logging.exception(u'所有线路连接 tcp host:%s port:%s 失败。'%(hostname,port))
+            # 按照socks4协议，这里返回和请求相同的ip和端口
+            # https://zh.wikipedia.org/wiki/SOCKS
+            self.sock.pack('!BBHI',0,91,port,dstip)
+            self.sock.close()
+            return
+
+        # 按照socks4协议，这里返回和请求相同的ip和端口
+        # https://zh.wikipedia.org/wiki/SOCKS
+        self.sock.pack('!BBHI',0,90,port,dstip)
+
+        self.forward(self.sock,remote_sock,5*60)
+
+
 
     def socks5Handle(self):
         # 鉴定
