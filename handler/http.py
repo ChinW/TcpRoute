@@ -118,10 +118,10 @@ class HttpHandler(HandlerBase):
                    {'code': code, 'message': _quote_html(message), 'short': short})
 
         if self.request_version != "HTTP/0.9":
-            self.sock.write('%s %s %s\r\n' % (self.request_version, code, short))
-            self.sock.write('Content-Type:text/html; charset=UTF-8\r\n')
-            self.sock.write('Connection: close\r\n\r\n')
-        self.sock.write(content.encode('utf-8'))
+            self.sock.sendall('%s %s %s\r\n' % (self.request_version, code, short))
+            self.sock.sendall('Content-Type:text/html; charset=UTF-8\r\n')
+            self.sock.sendall('Connection: close\r\n\r\n')
+        self.sock.sendall(content.encode('utf-8'))
 
     @staticmethod
     def create(sock,server):
