@@ -16,7 +16,7 @@ import time
 import re
 from gevent.threadpool import ThreadPool
 import sys
-from LRUCacheDict import lru_cache
+from LRUCacheDict import lru_cache, LRUCacheDict
 
 try:
     import dns.resolver
@@ -40,7 +40,7 @@ configIpBlacklist = []
 errIP = {}
 nameservers = 'system'
 nameservers_backup = ['8.8.8.8', '208.67.222.222']
-
+dns_cache = LRUCacheDict(500, 10 * 60 * 1000)
 
 def get_addr_type(addr):
     u""" 分析地址类型(IPv4、IPv6、域名)
@@ -95,46 +95,60 @@ if __name__ == "__main__":
     doctest.testmod()
 
 
-@lru_cache(500, 10 * 60 * 1000, lock=None)
 def dnsQuery(hostname):
     global errIP
 
-    ipList = _dnsQuery(hostname, nameservers)
+    ip_list = dns_cache.get(hostname,None)
 
-    for ip in ipList:
+    if ip_list:
+        for ip in ip_list:
+            if ip in errIP:
+                ip_list = None
+                del dns_cache[hostname]
+                logging.info(u'[DNS] %s 缓存内发现错误IP(%s)，删除缓存。' %(hostname,ip))
+                break
+    if ip_list:
+        logging.debug(u'[DNS] %s 缓存命中，ip:%s。'%(hostname,ip_list))
+        return ip_list
+
+    ip_list = _dnsQuery(hostname, nameservers)
+
+    for ip in ip_list:
         if ip in errIP:
             # 解析异常，清空解析结果
             logging.info(u'[DNS]默认解析服务器解析到异常IP，hostname=%s ，ip=%s ,nameserver=%s' % (hostname, ip, nameservers))
-            ipList = []
+            ip_list = []
             break
 
-    if not ipList:
+    if not ip_list:
         # 无解析结果时使用备用服务器重新解析
         for i in range(4):
             tcp = bool((i + 1) % 2)  # 间隔使用 TCP 协议查询
-            ipList = _dnsQuery(hostname, nameservers_backup, tcp)
-            for ip in ipList:
+            ip_list = _dnsQuery(hostname, nameservers_backup, tcp)
+            for ip in ip_list:
                 if ip in errIP:
-                    ipList = []
+                    ip_list = []
                     logging.info(u'[DNS]备用解析服务器解析得到异常IP(%s)，hostname=%s ，ip=%s ,nameserver=%s,TCP=%s' % (
                         i, hostname, ip, nameservers_backup, tcp))
                     break
-            if ipList:
+            if ip_list:
                 logging.debug(u'[DNS]备用解析服务器解析成功(%s)，hostname=%s ，ip=%s ,nameserver=%s,TCP=%s' % (
-                    i, hostname, ipList, nameservers_backup, tcp))
-                return ipList
+                    i, hostname, ip_list, nameservers_backup, tcp))
+                dns_cache[hostname] = ip_list
+                return ip_list
             else:
                 logging.info(
                     u'[DNS]备用解析服务器解析失败(%s)，hostname=%s ，nameserver=%s,TCP=%s' % (i, hostname, nameservers_backup, tcp))
 
     else:
-        logging.debug(u'[DNS]默认解析服务器解析成功，hostname=%s ，ip=%s ,nameserver=%s' % (hostname, ipList, nameservers))
+        logging.debug(u'[DNS]默认解析服务器解析成功，hostname=%s ，ip=%s ,nameserver=%s' % (hostname, ip_list, nameservers))
 
-    if not ipList:
+    if not ip_list:
         logging.warn(u'[DNS]默认及备用解析服务器解析失败，hostname=%s ，ip=%s ,nameserver=%s ,nameserversBackup=%s' % (
-            hostname, ipList, nameservers, nameservers_backup))
+            hostname, ip_list, nameservers, nameservers_backup))
 
-    return ipList
+    dns_cache[hostname] = ip_list
+    return ip_list
 
 
 def _dnsQuery(hostname, serveListr='system', tcp=False):
