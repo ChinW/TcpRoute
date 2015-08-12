@@ -222,7 +222,7 @@ class HttpRequest():
                 self.send_error(400, "Bad request version (%r)" % self.request_version)
                 return False
 
-            self.version_number = [int(i) for i in self.version_number]
+            self.version_number = tuple([int(i) for i in self.version_number])
 
             if self.version_number >= (1, 1):
                 # http 1.1 默认打开 持久连接
@@ -240,16 +240,17 @@ class HttpRequest():
         # TODO: 作为代理时需要删除 Connection 指定的头
         # 详见 HTTP协议RFC2616 14.10
         conntype = self.headers.get('Connection', '')
-        conntype = self.headers.get('Proxy-Connection', conntype)
+        conntype = self.headers.get('Proxy-Connection', conntype).lower()
+        conntypes = (t.strip() for t in conntype.split(","))
 
         if self.headers.has_key('Connection'):
             del self.headers['Connection']
         if self.headers.has_key('Proxy-Connection'):
             del self.headers['Proxy-Connection']
 
-        if conntype.lower() == 'close':
+        if 'close' in conntypes:
             self.close_connection = True
-        elif conntype.lower() == 'keep-alive':
+        elif 'keep-alive' in conntypes:
             self.close_connection = False
 
         self.host = self.headers.get('Host', None)
