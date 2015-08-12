@@ -68,7 +68,8 @@ class HandlerBase(object):
         try:
             while True:
                 try:
-                    data=s.recv(1024)
+                    data=s.recv(65536)
+                    #logging.debug(u'len(data)=%s'%len(data))
                     if not data:
                         break
                     o['forward_data_time'] = int(time.time()*1000)
