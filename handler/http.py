@@ -78,8 +78,6 @@ class HttpHandler(HandlerBase):
 
         self.headers = self.MessageClass(self.sock, 0)
 
-        # TODO: 作为代理时需要删除 Connection 指定的头
-        # 详见 HTTP协议RFC2616 14.10
         conntype = self.headers.get('Connection', '')
         conntype = self.headers.get('Proxy-Connection', conntype).lower()
         conntypes = [t.strip() for t in conntype.split(",")]
@@ -89,10 +87,20 @@ class HttpHandler(HandlerBase):
         if self.headers.has_key('Proxy-Connection'):
             del self.headers['Proxy-Connection']
 
+        # 作为代理时需要删除 Connection 指定的头
+        # 详见 HTTP协议RFC2616 14.10
+        for t in conntypes:
+            if self.headers.has_key(t):
+                del self.headers[t]
+
         if 'close' in conntypes:
             self.close_connection = True
         elif 'keep-alive' in conntypes:
             self.close_connection = False
+
+        # 防止协议被升级为 http2
+        if self.headers.has_key('upgrade'):
+            del self.headers['upgrade']
 
         self.host = self.headers.get('Host', None)
 

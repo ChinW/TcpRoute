@@ -57,3 +57,4 @@ target/
 *.pyperf
 *.pyproj
 *.sln
+.idea/

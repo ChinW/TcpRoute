@@ -9,40 +9,40 @@ u"""HTTP 工具
 
 """
 
-        # GET 无请求实体
-        # PUT 方法，写入新文档，有请求实体
-        # POST 提交表单，有请求实体
-        # TRACE 测试方法，请求无实体，响应有实体，内容时web服务器收到的请求头
-        # OPTIONS 请求应该无实体，响应可能有实体(0长度)。
-        # DELETE 请求无实体，响应有实体
+# GET 无请求实体
+# PUT 方法，写入新文档，有请求实体
+# POST 提交表单，有请求实体
+# TRACE 测试方法，请求无实体，响应有实体，内容时web服务器收到的请求头
+# OPTIONS 请求应该无实体，响应可能有实体(0长度)。
+# DELETE 请求无实体，响应有实体
 
-        # Expect: 100-continue
-        # http://www.cnblogs.com/cxd4321/archive/2012/01/30/2331621.html
-        # http://www.cnblogs.com/zhengyun_ustc/p/100continue.html
-        # 代理收到源服务器的 100 响应需要检查客户是否是 http 1.0 或之前的版本，
-        # 1.0 或更早的版本不支持 100 请求，所以不应该转发 100 响应。
+# Expect: 100-continue
+# http://www.cnblogs.com/cxd4321/archive/2012/01/30/2331621.html
+# http://www.cnblogs.com/zhengyun_ustc/p/100continue.html
+# 代理收到源服务器的 100 响应需要检查客户是否是 http 1.0 或之前的版本，
+# 1.0 或更早的版本不支持 100 请求，所以不应该转发 100 响应。
 
-        # 204 响应没有响应实体
-        #
+# 204 响应没有响应实体
+#
 
-        # 等幂 方法
-        # GET，HEAD，PUT，DELETE
-        # OPTIONS和TRACE
+# 等幂 方法
+# GET，HEAD，PUT，DELETE
+# OPTIONS和TRACE
 
-        # 代理需要维护同名首部字段的相对顺序。 http 权威指南 116页。
+# 代理需要维护同名首部字段的相对顺序。 http 权威指南 116页。
 
-        # 目前这个类不需要对内容进行理解，只要能确保能识别到每个请求结尾即可。
-        # 具体对内容进行理解不需要在当前阶段实现，可以另外使用
+# 目前这个类不需要对内容进行理解，只要能确保能识别到每个请求结尾即可。
+# 具体对内容进行理解不需要在当前阶段实现，可以另外使用
 
-        #请求中消息主体（message-body）的存在是被请求中消息头域中是否存在内容长度
-        #（Content-Length）或传输译码（Transfer-Encoding）头域来通知的。一个消息主体
-        #（message-body）不能被包含在请求里如果某种请求方法（见5.1.1节）不支持请求里包含实
-        #体主体（entity-body）。一个服务器应该能阅读或再次转发请求里的消息主体；如果请求方法
-        #不允许包含一个实体主体（entity-body），那么当服务器处理这个请求时消息主体应该被忽略。
-        #对于响应消息，消息里是否包含消息主体依赖相应的请求方法和响应状态码。所有 HEAD请求
-        #方法的请求的响应消息不能包含消息主体，即使实体头域出现在请求里。所有 1XX（信息的），
-        #204（无内容的）和304（没有修改的）的响应都不能包括一个消息主体（message-body）。
-        #所有其他的响应必须包括消息主体，即使它长度可能为零。
+# 请求中消息主体（message-body）的存在是被请求中消息头域中是否存在内容长度
+# （Content-Length）或传输译码（Transfer-Encoding）头域来通知的。一个消息主体
+# （message-body）不能被包含在请求里如果某种请求方法（见5.1.1节）不支持请求里包含实
+# 体主体（entity-body）。一个服务器应该能阅读或再次转发请求里的消息主体；如果请求方法
+# 不允许包含一个实体主体（entity-body），那么当服务器处理这个请求时消息主体应该被忽略。
+# 对于响应消息，消息里是否包含消息主体依赖相应的请求方法和响应状态码。所有 HEAD请求
+# 方法的请求的响应消息不能包含消息主体，即使实体头域出现在请求里。所有 1XX（信息的），
+# 204（无内容的）和304（没有修改的）的响应都不能包括一个消息主体（message-body）。
+# 所有其他的响应必须包括消息主体，即使它长度可能为零。
 
 
 u'''
@@ -161,6 +161,34 @@ Upgrade头域）的响应。
 Upgrade头域只能应用于立即连接（immediate connection）。 因此，upgrade关键字必须被提
 供在Connection头域里（见14.10节），只要Upgrade头域呈现在HTTP/1.1消息里。
 """
+u"""
+websocket 协议
+GET /socket.io/?EIO=3&transport=websocket&sid=cpfS_eqI0SAR9R1CKAyO HTTP/1.1
+Host: slack-io.socket.io
+Connection: Upgrade
+Pragma: no-cache
+Cache-Control: no-cache
+Upgrade: websocket
+Origin: http://socket.io
+Sec-WebSocket-Version: 13
+DNT: 1
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/44.0.2403.155 Safari/537.36
+Accept-Encoding: gzip, deflate, sdch
+Accept-Language: zh-CN,zh;q=0.8
+Cookie: io=cpfS_eqI0SAR9R1CKAyO; __utmt=1; __utma=196034734.2078174180.1439598898.1439598898.1439598898.1; __utmb=196034734.1.10.1439598898; __utmc=196034734; __utmz=196034734.1439598898.1.1.utmcsr=(direct)|utmccn=(direct)|utmcmd=(none)
+Sec-WebSocket-Key: dTf+3WZUeKBE2iRBqbqTJQ==
+Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits
+
+HTTP/1.1 101 Switching Protocols
+Server: nginx/1.5.11
+Date: Sat, 15 Aug 2015 00:35:33 GMT
+Connection: upgrade
+Upgrade: websocket
+Sec-WebSocket-Accept: BGP2BW8CHCnvZFxexjtJa8IyQzw=
+
+..............3probe....R....p...sG....
+
+"""
 
 u"""
 Via常用头域必须被网关（gateways）和代理（proxies）使用，用来指明在用户代理和服务器
@@ -168,19 +196,172 @@ Via常用头域必须被网关（gateways）和代理（proxies）使用，用�
 它和RFC822[9]里的“Received”头域相似，并且它用于跟踪消息的转发，避免请求循环，和
 指定沿着请求/响应链的所有发送者的协议能力。
 """
+u"""
 
+3.6.1 块传输编码（Chunked Transfer Coding）
+块编码（chunked encoding）改变消息主体使消息主体（message body）成块发送。 每一个块
+有它自己的大小（size）指示器，在所有的块之后会紧接着一个可选的包含实体头域的尾部
+（trailer）。这种编码允许发送端能动态生成内容，并能携带能让接收端判断消息是否接收完整
+的有用信息。
+       Chunked-Body（块正文）   = *chunk（块）
+                                 last-chunk（最后块）
+                              trailer（尾部）
+                             CRLF
+       chunk（块）          = chunk-size [ chunk-extension ] CRLF
+                         chunk-data CRLF
+       chunk-size     = 1*HEX
+       last-chunk     = 1*（"0"） [ chunk-extension ] CRLF
+       chunk-extension= *（ ";" chunk-ext-name [ "=" chunk-ext-val ] ）
+       chunk-ext-name = token
+       chunk-ext-val  = token | quoted-string
+       chunk-data     = chunk-size（OCTET）
+       trailer        = *（entity-header CRLF）
+chunk-size是用16 进制数字字符串。 块编码（chunked encoding）以大小为0的块结束，紧接
+着是尾部（trailer），尾部以一个空行终止。
 
+尾部（trailer）允许发送端在消息的末尾包含额外的HTTP头域（header field）。Trailer头域
+（Trailer header field，在 14.40 节阐述）来指明哪些头域被包含在块传输编码的尾部
+（trailer） （见14.40节）
+
+如果服务器要使用块传输编码进行响应，除非以下至少一条为真时它才能包含尾部
+（trailer）：
+a）如果此响应的对应请求包括一个 TE头域，并且利用 “trailers”指明了块传输编码响应的尾
+部是可以接受的（TE头域在14.39节中描述；或者
+ b）如果是源服务器进行响应，响应里trailer字段里全部包含的是可选的元信息，并且接收端
+接收此块传输编码响应时可能不会理会响应的尾部（以一种源服务器是可以接受的方式）。换
+句话说，源服务器原意接受尾部（trailer）可能会在到达客户端时被丢弃的可能性。
+
+当消息被一个HTTP/1.1（或更高版本）的代理（proxy）接收并转发到一个HTTP/1.0接收端
+的时候，此要求防止了一种互操作性的失败。
+
+在附录19.4.6节介绍了一个例子，这个例子介绍怎样对一个块主体（chunked-body）进行解
+码。
+所有HTTP/1.1应用程序必须能接收和解码以块（chunked）传输编码进行编码的消息主体，
+并且必须能忽略它们不能理解的块扩展（chunk-extentsion）。"""
+# HTTP 权威指南 400 / 722 分块编码规则。
 
 import urlparse
 
+try:
+    from io import BytesIO
+except ImportError:
+    try:
+        from cStringIO import StringIO as BytesIO
+    except ImportError:
+        from StringIO import StringIO as BytesIO
 
-class HttpRequest():
+
+class HttpLengthBody():
+    u""" http 实体类(Length 类型、同时支持关闭连接类型)
+
+头部空行结束后就是实体，实体直接按长度结束，结束时并没有多余的换行。
+    """
+
+    def __init__(self, sock=None, length=None):
+        u"""初始化"""
+        if sock:
+            self.sock = sock
+        else:
+            self.sock = BytesIO()
+        self.length = length
+        self.readed_length = 0
+
+    def _recv(self, size):
+        if hasattr(self.sock, "recv"):
+            return self.sock.recv(size)
+        else:
+            return self.sock.read(size)
+
+    def recv(self, size):
+        u"""读取
+
+正常结束时返回空，非正常结束(连接断开)时引发异常。
+        """
+        if self.length is None:
+            return self._recv(size)
+        else:
+            assert self.readed_length <= self.length
+
+            if self.readed_length == self.length:
+                return b""
+            else:
+                remain_length = self.length - self.readed_length
+
+                if size > remain_length:
+                    size = remain_length
+
+                data = self.recv(size)
+                self.readed_length += len(data)
+
+                if not data and size != 0:
+                    raise Exception(u'连接异常关闭，数据未全部传输完成！')
+                
+                return data
+
+class HttpChunkedOriginalBody():
+    u"""chunked 格式原始 body
+
+包含块的头部及内容。"""
+
+    def __init__(self, sock=None):
+        u"""初始化"""
+        if sock:
+            self.sock = sock
+        else:
+            self.sock = BytesIO()
+        self.chunked_length = None
+        self.readed_length = 0
+
+    def _recv(self, size):
+        if hasattr(self.sock, "recv"):
+            return self.sock.recv(size)
+        else:
+            return self.sock.read(size)
+
+    def recv(self, size):
+        u"""读取
+
+正常结束时返回空，非正常结束(连接断开)时引发异常。
+        """
+        if self.length is None:
+            return self._recv(size)
+        else:
+            assert self.readed_length <= self.length
+
+            if self.readed_length == self.length:
+                return b""
+            else:
+                remain_length = self.length - self.readed_length
+
+                if size > remain_length:
+                    size = remain_length
+
+                data = self.recv(size)
+                self.readed_length += len(data)
+
+                if not data and size != 0:
+                    raise Exception(u'连接异常关闭，数据未全部传输完成！')
+
+                return data
+
+
+
+class HttpBase():
+    u""""""
+
+    def __init__(self, sock):
+        self.sock = sock
+
+
+class HttpRequest(HttpBase):
     u""" HTTP 请求类 """
-    def __init__(self,sock = None):
+
+    def __init__(self, sock=None):
         u"""如果存在 sock ，那么自动根据sock内容生成请求
 
 注意，通过sock生成时只处理一个请求，调用方可以在本请求结束时再次创建新的 HttpRequest 处理下一个请求。
         """
+        HttpBase.__init__(self, sock)
         self.command = ''
         self.request_version = "HTTP/1.1"
         self.path = ''
@@ -188,13 +369,10 @@ class HttpRequest():
         self.close_connection = True
         self.scheme = 'http'
         # 实体长度判断规则将开头文档
-        self.content_length = None      # 存在 content-length 头则为int类型的实体长度，否则为None
-        self.chunked = False
+        self.content_length = None  # 存在 content-length 头则为int类型的实体长度，否则为None
+        self.body_chunked = False
 
-        self.sock = sock
-
-
-    def parse_request_head(self):
+    def _parse_request_head(self):
         raw_requestline = self.sock.readline(65537)
         if len(raw_requestline) > 65536:
             # TODO: 过长
@@ -237,21 +415,24 @@ class HttpRequest():
 
         self.headers = self.MessageClass(self.sock, 0)
 
-        # TODO: 作为代理时需要删除 Connection 指定的头
-        # 详见 HTTP协议RFC2616 14.10
         conntype = self.headers.get('Connection', '')
         conntype = self.headers.get('Proxy-Connection', conntype).lower()
         conntypes = (t.strip() for t in conntype.split(","))
 
-        if self.headers.has_key('Connection'):
-            del self.headers['Connection']
-        if self.headers.has_key('Proxy-Connection'):
-            del self.headers['Proxy-Connection']
+        # 作为代理时需要删除 Connection 指定的头
+        # 详见 HTTP协议RFC2616 14.10
+        for t in conntypes:
+            if self.headers.has_key(t):
+                del self.headers[t]
 
         if 'close' in conntypes:
             self.close_connection = True
         elif 'keep-alive' in conntypes:
             self.close_connection = False
+
+        # 防止协议被升级为 http2
+        if self.headers.has_key('upgrade'):
+            del self.headers['upgrade']
 
         self.host = self.headers.get('Host', None)
 
@@ -273,16 +454,14 @@ class HttpRequest():
         # Don't incur the penalty of creating a list and then discarding it
         encodings = (enc.strip() for enc in tr_enc.split(","))
         if "chunked" in encodings:
-            self.chunked = True
-
-
+            self.body_chunked = True
 
         # TODO 未处理 post 存在请求实体的情况。
 
-
-
         return True
+
     pass
 
-class HttpResponse():
+
+class HttpResponse(HttpBase):
     pass
