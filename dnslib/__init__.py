@@ -250,6 +250,5 @@ def dnsQueryLoop():
 
         logging.info(u'[DNS]采集到的所有异常IP为：\r\n' + '\r\n'.join(errIP))
 
-        gevent.sleep(
-* 60 * 60)
+        gevent.sleep(1* 60 * 60)
 
