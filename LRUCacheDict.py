@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 # utf-8 中文编码
+import logging
 import threading
 
 from time import time
@@ -117,12 +118,13 @@ Traceback (most recent call last):
 KeyError: 2
 
     '''
-    def __init__(self,maxSize=100,expire=10*60*1000):
+    def __init__(self,maxSize=100,expire=10*60*1000,safe_del = None):
         self.maxSize=maxSize
         self.expire=expire
         self.__value = {}
         self.__expireDict = {}
         self.__accessDict = {}
+        self.safe_del = safe_del
 
     def __len__(self):
         return self.__value.__len__()
@@ -164,6 +166,19 @@ KeyError: 2
         return default
 
     def __delitem__(self, key):
+        u"""
+>>> import sys
+>>> safe_del=lambda d,k,v:sys.stdout.write('%s,%s,%s'%(type(d),k,v))
+>>> dd = LRUCacheDict(5,3*1000,safe_del=safe_del)
+>>> dd['a'] = 'aaa'
+>>> del dd['a']
+<type 'instance'>,a,aaa
+"""
+        if self.safe_del:
+            try:
+                self.safe_del(self,key,self.__value[key])
+            except:
+                logging.exception(u'safe_del err')
         del self.__value[key]
         del self.__accessDict[key]
         del self.__expireDict[key]
@@ -178,6 +193,11 @@ KeyError: 2
             accessList = sorted(self.__accessDict.iteritems(),key=lambda x:x[1])
             for i in range(len(self)-self.maxSize):
                 del self[accessList[i][0]]
+
+    def __del__(self):
+        if self.safe_del:
+            for k in self.__value.keys():
+                del self.__value[k]
 
 
 class _HashedSeq(list):
