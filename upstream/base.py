@@ -4,6 +4,9 @@
 
 from gevent import socket as _socket
 import re
+import gevent
+from httptool import HttpPool
+from gevent.lock import BoundedSemaphore
 
 
 class UpstreamBase(object):
@@ -39,6 +42,8 @@ class UpstreamBase(object):
             else:
                 self.upstream = _socket
 
+        self.http_pool = HttpPool(self,lock=BoundedSemaphore)
+
     def create_connection(self,address, timeout=5):
         if timeout == _socket._GLOBAL_DEFAULT_TIMEOUT:
             timeout = 10
@@ -49,6 +54,15 @@ class UpstreamBase(object):
 
     def get_name(self):
         return '%s-host:port' % (self.type)
+
+    # http 请求处理
+    # http 代理可以重写本方法
+    # socks 类代理不需要处理。
+    def get_http_conn(self,host,port):
+        u"""  获得http with 连接 """
+        return self.http_pool.get_conn(host,port)
+
+
 
 
 class ConfigError(ValueError):

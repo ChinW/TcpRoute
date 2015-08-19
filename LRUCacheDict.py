@@ -12,7 +12,7 @@ from contextlib import contextmanager
 class __None():
     pass
 
-class __lock:
+class _lock:
     def __enter__(self):
         return None
 
@@ -28,7 +28,7 @@ lock == None 时表示不使用锁
         return lru_cache()(maxSize)
 
     if lock == None:
-        lock = __lock
+        lock = _lock
 
     def _lru_cache(func):
         cache = LRUCacheDict(maxSize,expire)
