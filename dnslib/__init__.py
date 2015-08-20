@@ -236,14 +236,15 @@ def dnsQueryLoop():
             errIP.update(_errIP)
 
         for i in range(100):
-            ipList = _dnsQuery('twitter.com', ['8.8.8.234', '8.8.8.123', ])
-            for ip in ipList:
-                logging.info(u'[DNS]采集到远程异常IP(%s)。' % ip)
-                _errIP[ip] = int(time.time() * 1000)
-            if i % 10 == 0:
-                errIP.clear()
-                errIP.update(_errIP)
-            gevent.sleep(1)
+            for d in ('twitter.com','gist.github.com'):
+                ipList = _dnsQuery(d, ['8.8.8.234', '8.8.8.123', ])
+                for ip in ipList:
+                    logging.info(u'[DNS]采集到远程异常IP(%s)。' % ip)
+                    _errIP[ip] = int(time.time() * 1000)
+                if i % 10 == 0:
+                    errIP.clear()
+                    errIP.update(_errIP)
+            gevent.sleep(0.5)
 
         errIP.clear()
         errIP.update(_errIP)
