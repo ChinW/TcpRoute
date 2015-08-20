@@ -44,6 +44,8 @@ u"""HTTP 工具
 # 204（无内容的）和304（没有修改的）的响应都不能包括一个消息主体（message-body）。
 # 所有其他的响应必须包括消息主体，即使它长度可能为零。
 
+import email.parser
+import email.message
 
 u'''
 
@@ -250,6 +252,11 @@ except ImportError:
     except ImportError:
         from StringIO import StringIO as BytesIO
 
+from httptool.pool import HttpPool
+
+_MAXLINE = 65536
+_MAXHEADERS = 100
+
 
 class HttpLengthBody():
     u""" http 实体类(Length 类型、同时支持关闭连接类型)
@@ -295,20 +302,31 @@ class HttpLengthBody():
 
                 if not data and size != 0:
                     raise Exception(u'连接异常关闭，数据未全部传输完成！')
-                
+
                 return data
 
-class HttpChunkedOriginalBody():
-    u"""chunked 格式原始 body
 
-包含块的头部及内容。"""
+class HttpChunkedBody():
+    u"""chunked 格式 body
 
-    def __init__(self, sock=None):
-        u"""初始化"""
+提供带 chunked head 及不带 head 两种输出。
+但是不提供gzip等解压操作。
+"""
+
+    def __init__(self, sock=None, chunked_head=False):
+        u"""初始化
+
+sock        mysocket 实例或 BytesIO 实例，需要包含 readline 方法
+chunked_head        是否输出 chunked head
+
+        """
         if sock:
             self.sock = sock
         else:
             self.sock = BytesIO()
+
+        self.chunked_head = chunked_head
+
         self.chunked_length = None
         self.readed_length = 0
 
@@ -318,32 +336,51 @@ class HttpChunkedOriginalBody():
         else:
             return self.sock.read(size)
 
+    def recv_chunked_head(self):
+        str_length = self.sock.readline()
+        if not str_length:
+            raise Exception(u'连接非正常结束！')
+        self.chunked_length = int(str_length, 16)
+        self.readed_length = 0
+        return str_length
+
     def recv(self, size):
         u"""读取
 
 正常结束时返回空，非正常结束(连接断开)时引发异常。
         """
-        if self.length is None:
-            return self._recv(size)
-        else:
-            assert self.readed_length <= self.length
+        res = BytesIO()
 
-            if self.readed_length == self.length:
-                return b""
-            else:
-                remain_length = self.length - self.readed_length
+        if self.chunked_length == 0:
+            # 读到结束块结束
+            # 尾头域另行读取
+            return res.getvalue()
 
-                if size > remain_length:
-                    size = remain_length
+        if self.chunked_length is None or \
+                        self.chunked_length == self.readed_length:
+            # 第一次读取 或 当前块读取结束
+            if self.chunked_head:
+                res.write(self.recv_chunked_head())
 
-                data = self.recv(size)
-                self.readed_length += len(data)
+        data = self._recv(self.chunked_length - self.readed_length)
+        if self.chunked_length != 0 and (not data):
+            raise Exception(u'连接非正常结束！')
 
-                if not data and size != 0:
-                    raise Exception(u'连接异常关闭，数据未全部传输完成！')
+        self.readed_length += len(data)
 
-                return data
+        assert self.readed_length <= self.chunked_length
 
+        res.write(data)
+
+        if self.chunked_length == self.readed_length:
+            # 每个块结束都有 \r\n，并且不包含在块长度里面。
+            end_line = (self.sock.readline(2))
+            if end_line[-1] != '\n':
+                raise Exception(u'非正常的块结束标记. endline:%s' % end_line)
+            if self.chunked_head:
+                res.write(end_line)
+
+        return res.getvalue()
 
 
 class HttpBase():
@@ -351,6 +388,61 @@ class HttpBase():
 
     def __init__(self, sock):
         self.sock = sock
+        self.request_version = "HTTP/1.1"
+        self.close_connection = True
+        self.content_length = None  # 存在 content-length 头则为int类型的实体长度，否则为None
+        self.body_chunked = False
+        self.headers = {}  # MimeMessage()
+        self.trailer_headers = {}
+        self.version_number = (1, 1)
+
+    def _parse_head(self):
+        headers = []
+        while True:
+            line = self.sock.readline(_MAXLINE + 1)
+            if len(line) > _MAXLINE:
+                raise Exception(u'head 过长')
+            if len(line) <= 2:
+                # \r\n \n '' 几种可能
+                break
+        head_string = b''.join(headers).decode('utf-8')
+        return email.parser.Parser(_class=email.message).parsestr(head_string)
+
+    def get_body(self, chunked_head=False):
+        if self.body_chunked:
+            return HttpChunkedBody(self.sock, chunked_head)
+        else:
+            # 有长度或无长度(连接结束)
+            return HttpLengthBody(self.sock, self.content_length)
+
+    def parse_trailer(self):
+        u'''解析尾头部'''
+        if self.body_chunked and self.headers.has_key("Trailer"):
+            self.trailer_headers = self._parse_head()
+
+    def _check_close(self):
+        if self.version_number >= (1, 1):
+            # http 1.1 默认打开 持久连接
+            self.close_connection = False
+
+        conntype = self.headers.get('Connection', '')
+        conntype = self.headers.get('Proxy-Connection', conntype).lower()
+        self.conntypes = (t.strip() for t in conntype.split(","))
+
+        if 'close' in self.conntypes:
+            self.close_connection = True
+        elif 'keep-alive' in self.conntypes:
+            self.close_connection = False
+
+    def _check_body_length(self):
+        if self.headers.has_key('Content-Length'):
+            self.content_length = int(self.headers.get('Content-Length'))
+
+        tr_enc = self.headers.get('transfer-encoding', '').lower()
+        # Don't incur the penalty of creating a list and then discarding it
+        encodings = (enc.strip() for enc in tr_enc.split(","))
+        if "chunked" in encodings:
+            self.body_chunked = True
 
 
 class HttpRequest(HttpBase):
@@ -363,20 +455,18 @@ class HttpRequest(HttpBase):
         """
         HttpBase.__init__(self, sock)
         self.command = ''
-        self.request_version = "HTTP/1.1"
         self.path = ''
         self.host = ''  # 包含主机名及端口号
-        self.close_connection = True
         self.scheme = 'http'
-        # 实体长度判断规则将开头文档
-        self.content_length = None  # 存在 content-length 头则为int类型的实体长度，否则为None
-        self.body_chunked = False
 
-    def _parse_request_head(self):
+    def parse(self):
+        self._parse_request()
+
+    def _parse_request(self):
         raw_requestline = self.sock.readline(65537)
         if len(raw_requestline) > 65536:
             # TODO: 过长
-            raise Exception()
+            raise Exception(u'请求过长')
         raw_requestline = raw_requestline.rstrip('\r\n')
         words = raw_requestline.split()
         if len(words) == 2:
@@ -384,55 +474,28 @@ class HttpRequest(HttpBase):
             self.request_version = "HTTP/0.9"
             self.command, self.path = words
             if self.command != 'GET':
-                self.send_error(400, "Bad HTTP/0.9 request type (%r)" % self.command)
-                return False
+                raise Exception("Bad HTTP/0.9 request type (%r)" % self.command)
         elif len(words) == 3:
             self.command, self.path, self.request_version = words
 
             if not self.request_version.startswith('HTTP/'):
-                self.send_error(400, "Bad request version (%r)" % self.request_version)
-                return False
+                raise Exception("Bad request version (%r)" % self.request_version)
 
             base_version_number = self.request_version.split('/', 1)[1]
             self.version_number = base_version_number.split(".")
 
             if len(self.version_number) != 2:
-                self.send_error(400, "Bad request version (%r)" % self.request_version)
-                return False
+                raise Exception("Bad request version (%r)" % self.request_version)
 
             self.version_number = tuple([int(i) for i in self.version_number])
 
-            if self.version_number >= (1, 1):
-                # http 1.1 默认打开 持久连接
-                self.close_connection = False
-
             if self.version_number >= (2, 0):
-                self.send_error(505, "Bad request version (%r)" % self.request_version)
-                return False
+                raise Exception("Bad request version (%r)" % self.request_version)
+
         else:
-            self.send_error(400, "Bad request syntax (%r)" % raw_requestline)
-            return False
+            raise Exception("Bad request syntax (%r)" % raw_requestline)
 
-        self.headers = self.MessageClass(self.sock, 0)
-
-        conntype = self.headers.get('Connection', '')
-        conntype = self.headers.get('Proxy-Connection', conntype).lower()
-        conntypes = (t.strip() for t in conntype.split(","))
-
-        # 作为代理时需要删除 Connection 指定的头
-        # 详见 HTTP协议RFC2616 14.10
-        for t in conntypes:
-            if self.headers.has_key(t):
-                del self.headers[t]
-
-        if 'close' in conntypes:
-            self.close_connection = True
-        elif 'keep-alive' in conntypes:
-            self.close_connection = False
-
-        # 防止协议被升级为 http2
-        if self.headers.has_key('upgrade'):
-            del self.headers['upgrade']
+        self.headers = self._parse_head()
 
         self.host = self.headers.get('Host', None)
 
@@ -447,20 +510,19 @@ class HttpRequest(HttpBase):
         if self.urlparse.scheme:
             self.scheme = self.urlparse.scheme
 
-        if self.headers.has_key('Content-Length'):
-            self.content_length = int(self.headers.get('Content-Length'))
+        self._check_close()
+        self._check_body_length()
 
-        tr_enc = self.headers.get('transfer-encoding', '').lower()
-        # Don't incur the penalty of creating a list and then discarding it
-        encodings = (enc.strip() for enc in tr_enc.split(","))
-        if "chunked" in encodings:
-            self.body_chunked = True
-
-        # TODO 未处理 post 存在请求实体的情况。
-
-        return True
-
-    pass
+    def del_conntype(self):
+        u'''删除conntype 头'''
+        # 作为代理时需要删除 Connection 指定的头
+        # 详见 HTTP协议RFC2616 14.10
+        for t in self.conntypes:
+            if self.headers.has_key(t):
+                del self.headers[t]
+        # 防止协议被升级为 http2
+        if self.headers.has_key('upgrade'):
+            del self.headers['upgrade']
 
 
 class HttpResponse(HttpBase):
