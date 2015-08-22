@@ -413,6 +413,8 @@ size 尝试读取的最大长度。
             new.write(self.peek_data.read())
             new.seek(0)
             self.peek_data = new
+        if self.peek == True and value == True:
+            raise Exception(u"已开启 seek ，无法再次开启。如需多层 seek 请嵌套 socket 类。")
         self.peek = value
 
     def reset_peek_offset(self):
