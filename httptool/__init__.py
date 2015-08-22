@@ -400,13 +400,14 @@ class HttpBase():
         headers = []
         while True:
             line = self.sock.readline(_MAXLINE + 1)
+            headers.append(line) # 保证end line也被添加
             if len(line) > _MAXLINE:
                 raise Exception(u'head 过长')
             if len(line) <= 2:
                 # \r\n \n '' 几种可能
                 break
         head_string = b''.join(headers).decode('utf-8')
-        return email.parser.Parser(_class=email.message).parsestr(head_string)
+        return (head_string,email.parser.Parser(_class=email.message).parsestr(head_string))
 
     def get_body(self, chunked_head=False):
         if self.body_chunked:
@@ -418,7 +419,9 @@ class HttpBase():
     def parse_trailer(self):
         u'''解析尾头部'''
         if self.body_chunked and self.headers.has_key("Trailer"):
-            self.trailer_headers = self._parse_head()
+            self.trailer_headers_string, self.trailer_headers = self._parse_head()
+        else:
+            self.trailer_headers_string, self.trailer_headers = '',{}
 
     def _check_close(self):
         if self.version_number >= (1, 1):
@@ -459,10 +462,15 @@ class HttpRequest(HttpBase):
         self.host = ''  # 包含主机名及端口号
         self.scheme = 'http'
 
-    def parse(self):
-        self._parse_request()
+    def get_http_host_address(self):
+        address = self.host.split(':',1)
+        if len(address) == 1:
+            address.append(80)
+        else:
+            address[1]=int(address[1])
+        return address
 
-    def _parse_request(self):
+    def parse_head(self):
         raw_requestline = self.sock.readline(65537)
         if len(raw_requestline) > 65536:
             # TODO: 过长
@@ -495,7 +503,7 @@ class HttpRequest(HttpBase):
         else:
             raise Exception("Bad request syntax (%r)" % raw_requestline)
 
-        self.headers = self._parse_head()
+        self.headers_string, self.headers = self._parse_head()
 
         self.host = self.headers.get('Host', None)
 
@@ -513,16 +521,32 @@ class HttpRequest(HttpBase):
         self._check_close()
         self._check_body_length()
 
-    def del_conntype(self):
-        u'''删除conntype 头'''
+    def del_conntype(self,retain=['upgrade']):
+        u'''删除 conntype 相关头
+
+会从 headers 里面删除 Connection 包含的头,同时也会处理 Connection 值。
+
+retain 是保留的头列表。
+        '''
         # 作为代理时需要删除 Connection 指定的头
         # 详见 HTTP协议RFC2616 14.10
+
+        retain = [i.lower() for i in retain]
+        new_conntypes = []
         for t in self.conntypes:
-            if self.headers.has_key(t):
-                del self.headers[t]
-        # 防止协议被升级为 http2
+            t_lower = t.lower()
+            if (t_lower not in retain) and (self.headers.has_key(t_lower)):
+                del self.headers[t_lower]
+
+            if t_lower in retain:
+                new_conntypes.append(t)
+
+        self.conntypes = new_conntypes
+
+        u'''# 防止协议被升级为 http2
+
         if self.headers.has_key('upgrade'):
-            del self.headers['upgrade']
+            del self.headers['upgrade']'''
 
 
 class HttpResponse(HttpBase):
