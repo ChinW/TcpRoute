@@ -89,6 +89,7 @@ class HandlerBase(object):
                 pass
             elif e.errno == 10054:
                 # 远端重置了连接
+                #TODO: 部分网站直连可以成功，但是中途会重置链接。但是 multipath 只在建立连接部分做测试，并没有处理建立连接后被重置的情况。。。
                 logging.debug(u'远端重置了连接。')
                 pass
             else:

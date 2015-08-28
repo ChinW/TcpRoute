@@ -19,7 +19,8 @@ except ImportError:
         from StringIO import StringIO as BytesIO
 
 
-
+# TODO 合并 MySocket 、 SocketBase ，并且尝试允许 peek 嵌套。
+# 最初 SocketBase 并没有计划内置缓冲区，但是为了 radline 的性能使用了内置缓冲区。既然是用了缓冲区就和 MySocket 区别不大了。
 
 class SocketBase:
     u"""基本 socket
@@ -28,9 +29,22 @@ class SocketBase:
       所以一旦使用了readline 函数就不能在直接使用原始套接字的 recv 等函数了。
 """
 
-    def __init__(self, sock):
+    def __init__(self, sock = None):
         self.sock = sock
         self.peek_data = BytesIO()
+
+    def _recv(self, size):
+        if hasattr(self.sock,'recv'):
+            return self.sock.recv(size)
+        else:
+            return self.sock.read(size)
+
+    def _sendall(self, data):
+        if hasattr(self.sock,'sendall'):
+            return self.sock.sendall(data)
+        else:
+            return self.sock.write(data)
+
 
     def recv(self, size):
         u'''读数据，在读不够指定 size 数据时也会返回。
@@ -49,7 +63,7 @@ class SocketBase:
             # 数据不够时从 sock 读取
             data = b''
             try:
-                data = self.sock.recv(size - len(res))
+                data = self._recv(size - len(res))
             except error, e:
                 if (not res) and e.errno != EINTR:
                     # 没有预读数据并且不是 EINTR 异常
@@ -97,7 +111,7 @@ class SocketBase:
             elif len(res) < size:
                 data = b''
                 try:
-                    data = self.sock.recv(size - len(res))
+                    data = self._recv(size - len(res))
                 except error as e:
                     if e.errno == EINTR:
                         continue
@@ -141,7 +155,7 @@ size 尝试读取的最大长度。
             elif len(res) < size:
                 data = b''
                 try:
-                    data = self.sock.recv(size - len(res))
+                    data = self._recv(size - len(res))
                 except error as e:
                     if e.errno == EINTR:
                         continue
@@ -155,7 +169,7 @@ size 尝试读取的最大长度。
                     is_end = True
 
     def sendall(self, data):
-        return self.sock.sendall(data)
+        return self._sendall(data)
 
     def unpack(self, fmt, block=True):
         u'''解包
@@ -219,7 +233,7 @@ sleep = gevent.sleep
                         if timeout <= 0:
                             break
                         self.sock.settimeout(timeout)
-                        data = self.sock.recv(2048)
+                        data = self._recv(2048)
                         if not data:
                             break
 
@@ -233,6 +247,8 @@ sleep = gevent.sleep
         except:
             pass
 
+    def connect(self, address):
+        raise NotImplementedError()
 
     def fileno(self):
         return self.sock.fileno()
@@ -296,7 +312,7 @@ class MySocket(SocketBase):
             # 数据不够时从 sock 读取
             data = b''
             try:
-                data = self.sock.recv(size - len(res))
+                data = self._recv(size - len(res))
             except error, e:
                 if (not res) and e.errno != EINTR:
                     # 没有预读数据并且不是 EINTR 异常
@@ -346,7 +362,7 @@ class MySocket(SocketBase):
             elif len(res) < size:
                 data = b''
                 try:
-                    data = self.sock.recv(size - len(res))
+                    data = self._recv(size - len(res))
                 except error as e:
                     if e.errno == EINTR:
                         continue
@@ -390,7 +406,7 @@ size 尝试读取的最大长度。
             elif len(res) < size:
                 data = b''
                 try:
-                    data = self.sock.recv(size - len(res))
+                    data = self._recv(size - len(res))
                 except error as e:
                     if e.errno == EINTR:
                         continue
@@ -404,7 +420,7 @@ size 尝试读取的最大长度。
                     is_end = True
 
     def sendall(self, data):
-        return self.sock.sendall(data)
+        return self._sendall(data)
 
     def set_peek(self, value):
         u'''开关预读'''
@@ -476,7 +492,7 @@ sleep = gevent.sleep
                         if timeout <= 0:
                             break
                         self.sock.settimeout(timeout)
-                        data = self.sock.recv(2048)
+                        data = self._recv(2048)
                         if not data:
                             break
 

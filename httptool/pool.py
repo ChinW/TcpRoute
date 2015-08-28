@@ -25,6 +25,8 @@ def is_connection_dropped(sock):  # Platform-specific
     Note: For platforms like AppEngine, this will always return ``False`` to
     let the platform handle connection recycling transparently for us.
     """
+    if hasattr(sock,'is_connection_dropped'):
+        return  sock.is_connection_dropped()
 
     if not poll:
         if not select:  # Platform-specific: AppEngine
@@ -100,11 +102,12 @@ class HttpPool():
         else:
             raise ValueError('callable(lock)==False')
 
-    def get_conn(self, host, port):
+    def get_conn(self, address):
         u"""获得连接
 
 没有连接时自动创建链接。
         """
+        host, port = address
         with self.lock:
             site_connes = self.site_dict.get(u'%s:%s' % (host, poll), None)
             if site_connes:

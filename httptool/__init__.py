@@ -258,6 +258,7 @@ _MAXLINE = 65536
 _MAXHEADERS = 100
 
 
+
 class HttpLengthBody():
     u""" http 实体类(Length 类型、同时支持关闭连接类型)
 
@@ -394,6 +395,7 @@ class HttpBase():
         self.body_chunked = False
         self.headers = {}  # MimeMessage()
         self.trailer_headers = {}
+        self.trailer_headers_string = b''
         self.version_number = (1, 1)
 
     def _parse_head(self):
@@ -407,7 +409,7 @@ class HttpBase():
                 # \r\n \n '' 几种可能
                 break
         head_string = b''.join(headers).decode('utf-8')
-        return (head_string,email.parser.Parser(_class=email.message).parsestr(head_string))
+        return (head_string,email.parser.Parser(_class=email.message.Message).parsestr(head_string))
 
     def get_body(self, chunked_head=False):
         if self.body_chunked:
@@ -430,6 +432,12 @@ class HttpBase():
 
         conntype = self.headers.get('Connection', '')
         conntype = self.headers.get('Proxy-Connection', conntype).lower()
+
+        if self.headers.has_key('Connection'):
+            del self.headers['Connection']
+        if self.headers.has_key('Proxy-Connection'):
+            del self.headers['Proxy-Connection']
+
         self.conntypes = (t.strip() for t in conntype.split(","))
 
         if 'close' in self.conntypes:
@@ -447,6 +455,28 @@ class HttpBase():
         if "chunked" in encodings:
             self.body_chunked = True
 
+    def head_to_string(self,head):
+        return head.as_string().replace('\n','\r\n')
+
+    def get_head_string(self):
+        u"""获得头 string(包含　ＧＥＴ　／　ＨＴＴＰ／１．１)
+
+转发时使用。
+"""
+        res = BytesIO()
+        res.write(b'%s %s %s\r\n'%(self.command,self.path,self.request_version))
+        if self.conntypes:
+            self.headers['Connection'] = ','.join(self.conntypes)
+
+        res.write(self.head_to_string(self.headers))
+        return  res.getvalue()
+
+    def get_trailer_string(self):
+        u'''获得尾部头 string
+
+转发时使用
+        '''
+        return self.trailer_headers_string
 
 class HttpRequest(HttpBase):
     u""" HTTP 请求类 """

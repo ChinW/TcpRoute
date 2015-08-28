@@ -587,22 +587,51 @@ ping 499 size:1400 time:192ms
 
 Process finished with exit code 0
 """
+
+    u""" 包序列号是包在数据流的位置。
+
+    每个包携带ACK序列号，用确认序号之前的包全部收到。这个的缺陷丢失单个包时也会整体重发。如果每个包一个确认，会造成确认包太多了。 """
+
     def __init__(self, config):
         UpstreamBase.__init__(self, config)
 
         self.udp_tunnel_hostname = config.get('host')
-        self.udp_tunnel = config.get('port')
+        self.udp_tunnel_port = config.get('port')
 
-        if self.udp_tunnel is None or self.udp_tunnel is None:
+        if self.udp_tunnel_hostname is None or self.udp_tunnel_port is None:
             ms = u'[配置错误] host、port 不能为空！ upstream-type:%s' % self.type
             raise ConfigError(ms)
 
         class socket(SocketBase):
             # TODO: 停掉一些不支持方法。
-            def __init__(self, family=_socket.AF_INET, type=_socket.SOCK_STREAM, proto=0, _sock=None):
-                if _sock is None:
-                    _sock = socket.upstream.socket(family=family, type=type, proto=proto)
-                SocketBase.__init__(self, _sock)
+            def __init__(self, family=_socket.AF_INET, type=_socket.SOCK_STREAM, proto=0):
+                SocketBase.__init__(self, None)
+                self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+                self.send_offset = None
+                self.send_buff = []
+
+                self.recv_offset = None
+                self.recv_buff = []
+
+            def _recv(self, size):
+                u"""SocketBase 所有的读操作都通过这个函数接受。"""
+                pass
+
+            def _sendall(self, data):
+                u"""SocketBase 所有的写操作都通过这个函数发出。"""
+
+                pass
+
+            def connect(self, address):
+                u""""""
+                for retry in range(5):
+                    pass
+                    # 发送 SYN
+                    # 接收 SYN+ACK
+
+            def is_connection_dropped(self):
+                pass
 
         socket.udp_tunnel = self.udp_tunnel
         socket.udp_tunnel = self.udp_tunnel
@@ -614,96 +643,17 @@ Process finished with exit code 0
         startTime = int(time.time() * 1000)
         hostname = address[0]
         port = address[1]
-
-        try:
-            _sock = self.upstream.create_connection((self.socks5_hostname, self.socks5_port), timeout,)
-        except:
-            info = traceback.format_exc()
-            tcpping = int(time.time() * 1000) - startTime
-            logging.warn(u'[socks5] 远程代理服务器连接失败！ socks5_hostname:%s ,socks5_port:%s ,timeout:%s,time:%s' % (
-                self.socks5_hostname, self.socks5_port, timeout, tcpping))
-            logging.warn('%s\r\n\r\n' % info)
-            raise
-            raise
-
-        _sock.setsockopt(_socket.IPPROTO_TCP, _socket.TCP_NODELAY, 1)
-        _sock.settimeout(timeout * 2)
-
-        tcpping = int(time.time() * 1000) - startTime
-        logging.debug(u'[socks5] 远程代理服务器已连接  socks5_hostname:%s ,socks5_port:%s ,timeout:%s,time:%s' % (
-            self.socks5_hostname, self.socks5_port, timeout, tcpping))
-
-        # 登录
-        _sock.pack('BBB', 0x05, 0x01, 0x00)
-
-        # 登录回应
-        ver, method = _sock.unpack( 'BB')
-        tcpping = int(time.time() * 1000) - startTime
-        if ver != 0x05 or method != 0x00:
-            _sock.close(safe=False)
-            ms = u'[socks5] 远程代理服务器登录失败！ host:%s ,port:%s, time:%s' % (self.socks5_hostname, self.socks5_port, tcpping)
-            raise UpstreamLoginError(ms)
-        logging.debug(
-            u'[socks5] 远程代理服务器登陆成功。 host:%s ,port:%s ,time:%s' % (self.socks5_hostname, self.socks5_port, tcpping))
-
-        # 请求连接
-        atyp = dnslib.get_addr_type(hostname)
-        if atyp == 0x01:
-            # ipv4
-            _sock.pack('!BBBBIH', 0x05, 0x01, 0x00, atyp, struct.unpack('!I', _socket.inet_aton(hostname))[0], port)
-        elif atyp == 0x03:
-            # 域名
-            _sock.pack('!BBBBB%ssH' % len(hostname), 0x05, 0x01, 0x00, atyp, len(hostname), hostname, port)
-        elif atyp == 0x04:
-            # ipv6
-            _str = _socket.inet_pton(_socket.AF_INET6, hostname)
-            a, b = struct.unpack('!2Q', _str)
-            _sock.pack('!BBBB2QH', 0x05, 0x01, 0x00, atyp, a, b, port)
-        else:
-            tcpping = int(time.time() * 1000) - startTime
-            ms = u'[socks5] 地址类型未知！ atyp:%s ,time:%s' % (atyp, tcpping)
-            _sock.close(safe=False)
-            assert False, ms
-
-        # 请求回应
-        ver, rep, rsv, atyp = _sock.unpack('BBBB')
-        if ver != 0x05:
-            _sock.close(safe=False)
-            raise UpstreamProtocolError(u'未知的服务器协议版本！')
-        if rep != 0x00:
-            tcpping = int(time.time() * 1000) - startTime
-            ms = u'[socks5] 远程代理服务器无法连接目标网站！ ver:%s ,rep:%s， time=%s' % (ver, rep, tcpping)
-            _sock.close(safe=False)
-            raise _socket.error(10060,
-                                (u'[Socks5] 代理服务器无法连接到目的主机。socks5_host = %s, '
-                                 u'socks5_port = %s ,host = %s ,port = %s ,rep = %s') %
-                                (self.socks5_hostname, self.socks5_port, hostname, port, rep))
-
-        if atyp == 0x01:
-            _sock.unpack('!IH')
-        elif atyp == 0x03:
-            length = _sock.unpack('B')
-            _sock.unpack('%ssH' % length)
-        elif atyp == 0x04:
-            _sock.unpack('!2QH')
-
-        tcpping = int(time.time() * 1000) - startTime
-        # TODO: 这里需要记录下本sock连接远程的耗时。
-
-        return self.socket(_sock=_sock)
-
+        sock = self.socket()
+        sock.connect(address)
+        return sock
 
     def get_display_name(self):
-        return '[%s]socks5_hostname=%s,socks5_port=%s' % (self.type,self.socks5_hostname, self.socks5_port)
+        return '[%s]UdpTunnel_hostname=%s,UdpTunnel_port=%s' % (
+        self.type, self.udp_tunnel_hostname, self.udp_tunnel_port)
 
     def get_name(self):
-        return '%s?socks5_hostname=%s&socks5_port=%s' % (self.type,self.socks5_hostname, self.socks5_port)
-
-
-
-
-
-
+        return '%s?UdpTunnel_hostname=%s&UdpTunnel_port=%s' % (
+        self.type, self.udp_tunnel_hostname, self.udp_tunnel_port)
 
 
 u'''

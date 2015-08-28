@@ -63,7 +63,7 @@ remote_port        目标端口
                 try:
                     remote_sock = self.server.upstream.create_connection((self.remote_host,self.remote_port),)
                 except:
-                    logging.exception(u'所有线路连接 tcp host:%s port:%s 失败。'%(self.remote_host,self.remote_port))
+                    logging.exception(u'连接 tcp host:%s port:%s 失败。'%(self.remote_host,self.remote_port))
                     self.msock.close()
                     return
                 self.forward(self.sock,remote_sock,5*60)
@@ -74,29 +74,33 @@ remote_port        目标端口
                 del request.headers['Upgrade']
 
         try:
-            remote_sock = self.server.upstream.create_connection(request.get_http_host_address(),)
+            remote_sock = self.server.upstream.get_http_conn(request.get_http_host_address())
         except:
             logging.exception(u'所有线路连接 tcp host:%s port:%s 失败。'%(self.remote_host,self.remote_port))
             self.msock.close()
             return
-        #TODO: 转发 http请求。
+
+        remote_sock.sendall(request.get_head_string())
+        #TODO: 另开一个线程接受回应。
+        #TODO: 这里就要开始接受回应，有可能客户端在等待 100-continue 回应。
+        body = request.get_body()
+        while True:
+            data = body.recv(2**16)
+            if data:
+                remote_sock.sendall(data)
+            else:
+                break
+        # 大概做法，接收请求，建立新连接并发出请求，然后将回应丢到回应队列里面去
+        # 回应队列限制长度，如果满了就阻塞添加到队列操作。
+        # 需要注意，碰到post请求就需要另开一个新连接，不要使用线程池里面的。
+        # 同时需要等待之前的请求完结之后在处理post请求。
+
+
         raise  NotImplementedError(u'未完成')
         remote_sock
 
 
 
-
-
-
-        for retry in range(1):
-            try:
-                with self.server.upstream.get_http_conn() as http_conn:
-
-                    pass
-            except:
-                pass
-
-        self.handle_one_request()
 
     def handle_one_request(self):
         if not self.parse_request():

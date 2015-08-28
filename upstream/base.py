@@ -58,9 +58,9 @@ class UpstreamBase(object):
     # http 请求处理
     # http 代理可以重写本方法
     # socks 类代理不需要处理。
-    def get_http_conn(self,host,port):
+    def get_http_conn(self,address):
         u"""  获得http with 连接 """
-        return self.http_pool.get_conn(host,port)
+        return self.http_pool.get_conn(address)
 
 
 
