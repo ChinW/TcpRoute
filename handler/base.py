@@ -79,6 +79,8 @@ class HandlerBase(object):
                         continue
                     raise
                 d.sendall(data)
+        except _socket.timeout as e:
+            logging.debug(u'连接长时间无数据，关闭。')
         except _socket.error as e :
             if e.errno == 9:
                 # 另一个协程关闭了链接。
