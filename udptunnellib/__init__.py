@@ -37,6 +37,7 @@ PACKET_DATA_SIZE = 1400
 #    1bit 1:非流式包（不怕丢失，不会重发，不增加序列号的包。）
 #         一般收到相同序列的包只处理第一个，存在这个标志的话不管是否已经收到了相同序列号的包都会处理。
 #         置1 时不会处理数据部分。
+#    1bit 1: SYN 建立连接位
 # B 8位可选头长度0-255
 # H 16位 数据长度
 # 可选字段
@@ -73,10 +74,12 @@ class ReliableStrram():
         pass
 
     def _fact_recv_data(self, data):
-        u""" 真实外部包输入时调用 """
+        u""" 外部真实包输入时调用 """
         send_offset, recv_offset, recv_buff_available_size, option, head_size, data_size \
             = struct.unpack_from(PACKET_FORMAT, data)
         struct_size = struct.calcsize(PACKET_FORMAT)
+
+        # 可选头
         packet_head = data[struct_size:struct_size + head_size]
         packet_data = data[struct_size + head_size:struct_size + head_size + data_size]
         # 新的安全接收偏移相对于老的safe偏移移动了多少(safe 是预期的下一个包的序列号)
@@ -88,6 +91,8 @@ class ReliableStrram():
                           ctypes.c_uint32(p['offset'] - (self.recv_start_offset + self.recv_safe_offset)) >= new_safe_offset
                           ]
         self.recv_buff[send_offset] = {'data':packet_data}
+
+
 
     def _fact_sendall(self, data):
         u""" 真实的发送数据接口 """

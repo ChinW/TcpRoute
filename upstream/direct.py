@@ -45,6 +45,8 @@ class DirectUpstream(UpstreamBase):
 
         socket.source_address = self.source_address
         socket.upstream = self.upstream
+        socket.display_name = self.get_display_name()
+        socket.name = self.get_name()
 
         self.socket = socket
 
@@ -80,8 +82,8 @@ class DirectUpstream(UpstreamBase):
     def _direct_create_connection(self,address,ip, timeout=10):
         # 实际连接
         _sock = self.upstream.create_connection((ip,address[1]),timeout,source_address=self.source_address)
-        sock = self.socket(_sock=_sock)
         _sock.setsockopt(_socket.IPPROTO_TCP,_socket.TCP_NODELAY, 1)
+        sock = self.socket(_sock=_sock)
         return sock
 
     def _create_connection(self, aync_task, address,ip, timeout=10):

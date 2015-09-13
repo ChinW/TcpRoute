@@ -124,6 +124,13 @@ class Socks5Handler(HandlerBase):
             self.sock.close()
             return
 
+        if hasattr(remote_sock,'display_name'):
+            remote_sock_display_name = remote_sock.display_name
+        else:
+            remote_sock_display_name = str(remote_sock)
+
+        logging.info(u'连接 tcp目标 host:%s port:%s 通过 %s 建立成功。'%(hostname,port,remote_sock_display_name))
+
         # TODO: 按照socks5协议，这里应该返回服务器绑定的地址及端口
         # http://blog.csdn.net/testcs_dn/article/details/7915505
         self.sock.pack('!BBBBIH', 0x05, 0x00, 0x00, 0x01, 0, 0)
