@@ -68,7 +68,8 @@ class HandlerBase(object):
         try:
             while True:
                 try:
-                    data=s.recv(1024)
+                    data=s.recv(65536)
+                    #logging.debug(u'len(data)=%s'%len(data))
                     if not data:
                         break
                     o['forward_data_time'] = int(time.time()*1000)
@@ -78,6 +79,8 @@ class HandlerBase(object):
                         continue
                     raise
                 d.sendall(data)
+        except _socket.timeout as e:
+            logging.debug(u'连接长时间无数据，关闭。')
         except _socket.error as e :
             if e.errno == 9:
                 # 另一个协程关闭了链接。
@@ -88,6 +91,7 @@ class HandlerBase(object):
                 pass
             elif e.errno == 10054:
                 # 远端重置了连接
+                #TODO: 部分网站直连可以成功，但是中途会重置链接。但是 multipath 只在建立连接部分做测试，并没有处理建立连接后被重置的情况。。。
                 logging.debug(u'远端重置了连接。')
                 pass
             else:

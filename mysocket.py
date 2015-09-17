@@ -19,7 +19,8 @@ except ImportError:
         from StringIO import StringIO as BytesIO
 
 
-
+# TODO 合并 MySocket 、 SocketBase ，并且尝试允许 peek 嵌套。
+# 最初 SocketBase 并没有计划内置缓冲区，但是为了 radline 的性能使用了内置缓冲区。既然是用了缓冲区就和 MySocket 区别不大了。
 
 class SocketBase:
     u"""基本 socket
@@ -28,9 +29,22 @@ class SocketBase:
       所以一旦使用了readline 函数就不能在直接使用原始套接字的 recv 等函数了。
 """
 
-    def __init__(self, sock):
+    def __init__(self, sock = None):
         self.sock = sock
         self.peek_data = BytesIO()
+
+    def _recv(self, size):
+        if hasattr(self.sock,'recv'):
+            return self.sock.recv(size)
+        else:
+            return self.sock.read(size)
+
+    def _sendall(self, data):
+        if hasattr(self.sock,'sendall'):
+            return self.sock.sendall(data)
+        else:
+            return self.sock.write(data)
+
 
     def recv(self, size):
         u'''读数据，在读不够指定 size 数据时也会返回。
@@ -49,7 +63,7 @@ class SocketBase:
             # 数据不够时从 sock 读取
             data = b''
             try:
-                data = self.sock.recv(size - len(res))
+                data = self._recv(size - len(res))
             except error, e:
                 if (not res) and e.errno != EINTR:
                     # 没有预读数据并且不是 EINTR 异常
@@ -97,7 +111,7 @@ class SocketBase:
             elif len(res) < size:
                 data = b''
                 try:
-                    data = self.sock.recv(size - len(res))
+                    data = self._recv(size - len(res))
                 except error as e:
                     if e.errno == EINTR:
                         continue
@@ -109,30 +123,39 @@ class SocketBase:
                     # 如果读到结尾(data == b'')
                     is_end = True
 
-    def readline(self, size):
+    def readline(self, size=9999999, end = '\n'):
         u'''读一行数据(完全阻塞)
 
 size 尝试读取的最大长度。
 
-直到读到 \n 或达到 size 长度时返回。
+直到读到 end 或达到 size 长度时返回。
 否则会不断尝试读取，直到超时引发异常。
 超时异常不会丢失缓冲区的数据。
 '''
         is_end = False
 
+        if not end:
+            raise ValueError('')
+
         while True:
             offset = self.peek_data.tell()
-            res = self.peek_data.readline(size)
+
+            res  = self.peek_data.read(size)
+            end_position = res.find(end)
+            if end_position >= 0:
+                # 找到结尾
+                res = res[:end_position+len(end)]
+                self.peek_data.seek(end_position+len(end))
 
             assert len(res) <= size, u'readline 错误，读了比预期多的数据。'
 
-            if res[-1] == '\n' or len(res) == size or is_end:
+            if res.endswith(end) or len(res) == size or is_end:
                 self._clear_peek_data()
                 return res
             elif len(res) < size:
                 data = b''
                 try:
-                    data = self.sock.recv(size - len(res))
+                    data = self._recv(size - len(res))
                 except error as e:
                     if e.errno == EINTR:
                         continue
@@ -146,7 +169,7 @@ size 尝试读取的最大长度。
                     is_end = True
 
     def sendall(self, data):
-        return self.sock.sendall(data)
+        return self._sendall(data)
 
     def unpack(self, fmt, block=True):
         u'''解包
@@ -210,7 +233,7 @@ sleep = gevent.sleep
                         if timeout <= 0:
                             break
                         self.sock.settimeout(timeout)
-                        data = self.sock.recv(2048)
+                        data = self._recv(2048)
                         if not data:
                             break
 
@@ -224,6 +247,8 @@ sleep = gevent.sleep
         except:
             pass
 
+    def connect(self, address):
+        raise NotImplementedError()
 
     def fileno(self):
         return self.sock.fileno()
@@ -287,7 +312,7 @@ class MySocket(SocketBase):
             # 数据不够时从 sock 读取
             data = b''
             try:
-                data = self.sock.recv(size - len(res))
+                data = self._recv(size - len(res))
             except error, e:
                 if (not res) and e.errno != EINTR:
                     # 没有预读数据并且不是 EINTR 异常
@@ -337,7 +362,7 @@ class MySocket(SocketBase):
             elif len(res) < size:
                 data = b''
                 try:
-                    data = self.sock.recv(size - len(res))
+                    data = self._recv(size - len(res))
                 except error as e:
                     if e.errno == EINTR:
                         continue
@@ -349,7 +374,7 @@ class MySocket(SocketBase):
                     # 如果读到结尾(data == b'')
                     is_end = True
 
-    def readline(self, size):
+    def readline(self, size=9999999,end='\n'):
         u'''读一行数据(完全阻塞)
 
 size 尝试读取的最大长度。
@@ -360,19 +385,28 @@ size 尝试读取的最大长度。
 '''
         is_end = False
 
+        if not end:
+            raise ValueError('')
+
         while True:
             offset = self.peek_data.tell()
-            res = self.peek_data.readline(size)
+
+            res = self.peek_data.read(size)
+            end_position = res.find(end)
+            if end_position >= 0:
+                # 找到结尾
+                res = res[:end_position+len(end)]
+                self.peek_data.seek(end_position+len(end))
 
             assert len(res) <= size, u'readline 错误，读了比预期多的数据。'
 
-            if res[-1] == '\n' or len(res) == size or is_end:
+            if res.endswith(end) or len(res) == size or is_end:
                 self._clear_peek_data()
                 return res
             elif len(res) < size:
                 data = b''
                 try:
-                    data = self.sock.recv(size - len(res))
+                    data = self._recv(size - len(res))
                 except error as e:
                     if e.errno == EINTR:
                         continue
@@ -386,7 +420,7 @@ size 尝试读取的最大长度。
                     is_end = True
 
     def sendall(self, data):
-        return self.sock.sendall(data)
+        return self._sendall(data)
 
     def set_peek(self, value):
         u'''开关预读'''
@@ -395,6 +429,8 @@ size 尝试读取的最大长度。
             new.write(self.peek_data.read())
             new.seek(0)
             self.peek_data = new
+        if self.peek == True and value == True:
+            raise Exception(u"已开启 seek ，无法再次开启。如需多层 seek 请嵌套 socket 类。")
         self.peek = value
 
     def reset_peek_offset(self):
@@ -456,7 +492,7 @@ sleep = gevent.sleep
                         if timeout <= 0:
                             break
                         self.sock.settimeout(timeout)
-                        data = self.sock.recv(2048)
+                        data = self._recv(2048)
                         if not data:
                             break
 

@@ -39,6 +39,8 @@ class Socks5Upstream(UpstreamBase):
         socket.socks5_hostname = self.socks5_hostname
         socket.socks5_port = self.socks5_port
         socket.upstream = self.upstream
+        socket.display_name = self.get_display_name()
+        socket.name = self.get_name()
 
         self.socket = socket
 

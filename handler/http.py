@@ -7,105 +7,110 @@ import mimetools
 import urlparse
 from gevent import socket
 from handler.base import HandlerBase
+import httptool
+from mysocket import MySocket
 
 HTTP_METHOD = ('GET', 'HEAD', 'PUT', 'POST', 'TRACE', 'OPTIONS', 'DELETE', 'CONNECT')
 
+u"""
+预期http处理
+
+收到 http 请求后解析头，然后获得host、port。
+获得到 host、port的http连接。
+转发 发出http头。
+
+
+"""
 
 class HttpHandler(HandlerBase):
     u'''http 代理协议'''
 
-    def __init__(self, sock, server):
+    def __init__(self, sock, server,porxy = True,remote_host=None,remote_port=None):
+        u"""
+
+porxy               是否是代理服务器模式，代理服务器模式会强制关闭不支持的协议。
+                        删除未知的 Connection 指定的 http 头，删除未知的 upgrade 头。
+                    非代理服务器模式（socks5拦截模式）碰到未知的 upgrade 头会回退到socks5代理模式。
+
+remote_host        目标主机
+remote_port        目标端口
+        """
         HandlerBase.__init__(self,sock,server)
+        self.porxy = porxy
+        self.remote_host = remote_host
+        self.remote_port = remote_port
 
     def handler(self):
-        self.handle_one_request()
+        # 开启 socket peek 功能。
+        msock = MySocket(self.sock,True)
+
+        # 解析 http 协议头
+        request = httptool.HttpRequest(self.msock)
+        request.parse_head()
+
+        upgrade = request.headers.get('Upgrade').lower()
+        if upgrade == "websocket":
+            # websocket 协议
+            # TODO: 这里不处理，收到服务器升级成功的回复后在处理
+            request.del_conntype(retain=['Upgrade'])
+        elif upgrade is not None:
+            # 存在未知的升级协议
+            if self.porxy is False and self.remote_host and self.remote_port:
+                # 非代理模式，对未知的协议直接转发。
+                msock.reset_peek_offset()
+                msock.set_peek(False)
+                # 对外发起请求
+                try:
+                    remote_sock = self.server.upstream.create_connection((self.remote_host,self.remote_port),)
+                except:
+                    logging.exception(u'连接 tcp host:%s port:%s 失败。'%(self.remote_host,self.remote_port))
+                    self.msock.close()
+                    return
+                self.forward(self.sock,remote_sock,5*60)
+                return
+            else:
+                # 代理模式，删除各种未知的协议
+                request.del_conntype(retain=[])
+                del request.headers['Upgrade']
+
+        try:
+            remote_sock = self.server.upstream.get_http_conn(request.get_http_host_address())
+        except:
+            logging.exception(u'所有线路连接 tcp host:%s port:%s 失败。'%(self.remote_host,self.remote_port))
+            self.msock.close()
+            return
+
+        remote_sock.sendall(request.get_head_string())
+        #TODO: 另开一个线程接受回应。
+        #TODO: 这里就要开始接受回应，有可能客户端在等待 100-continue 回应。
+        body = request.get_body()
+        while True:
+            data = body.recv(2**16)
+            if data:
+                remote_sock.sendall(data)
+            else:
+                break
+        # 大概做法，接收请求，建立新连接并发出请求，然后将回应丢到回应队列里面去
+        # 回应队列限制长度，如果满了就阻塞添加到队列操作。
+        # 需要注意，碰到post请求就需要另开一个新连接，不要使用线程池里面的。
+        # 同时需要等待之前的请求完结之后在处理post请求。
+
+
+        raise  NotImplementedError(u'未完成')
+        remote_sock
+
+
+
 
     def handle_one_request(self):
         if not self.parse_request():
             self.sock.shutdown(socket.SHUT_WR)
             self.sock.close()
             return
-        self.send_error(200, '%s %s %s %s' % (self.command, self.path, self.request_version, self.host))
+        self.send_error(500, '%s %s %s %s' % (self.command, self.path, self.request_version, self.remote_host))
         self.sock.shutdown(socket.SHUT_WR)
         self.sock.close()
 
-    def parse_request(self):
-        self.command = ''
-        self.request_version = "HTTP/0.9"
-        self.path = ''
-        self.host = ''  # 包含主机名及端口号
-        self.close_connection = True
-        self.scheme = 'http'
-
-        raw_requestline = self.sock.readline(65537)
-        if len(raw_requestline) > 65536:
-            # TODO: 过长
-            raise Exception()
-        raw_requestline = raw_requestline.rstrip('\r\n')
-        words = raw_requestline.split()
-        if len(words) == 2:
-            # http 0.9
-            self.command, self.path = words
-            if self.command != 'GET':
-                self.send_error(400, "Bad HTTP/0.9 request type (%r)" % self.command)
-                return False
-        elif len(words) == 3:
-            self.command, self.path, self.request_version = words
-
-            if not self.request_version.startswith('HTTP/'):
-                self.send_error(400, "Bad request version (%r)" % self.request_version)
-                return False
-
-            base_version_number = self.request_version.split('/', 1)[1]
-            self.version_number = base_version_number.split(".")
-
-            if len(self.version_number) != 2:
-                self.send_error(400, "Bad request version (%r)" % self.request_version)
-                return False
-
-            self.version_number = [int(i) for i in self.version_number]
-
-            if self.version_number >= (1, 1):
-                # http 1.1 默认打开 持久连接
-                self.close_connection = False
-
-            if self.version_number >= (2, 0):
-                self.send_error(505, "Bad request version (%r)" % self.request_version)
-                return False
-        else:
-            self.send_error(400, "Bad request syntax (%r)" % raw_requestline)
-            return False
-
-        self.headers = self.MessageClass(self.sock, 0)
-
-        # TODO: 作为代理时需要删除 Connection 指定的头
-        conntype = self.headers.get('Connection', '')
-        conntype = self.headers.get('Proxy-Connection', conntype)
-
-        if self.headers.has_key('Connection'):
-            del self.headers['Connection']
-        if self.headers.has_key('Proxy-Connection'):
-            del self.headers['Proxy-Connection']
-
-        if conntype.lower() == 'close':
-            self.close_connection = True
-        elif conntype.lower() == 'keep-alive':
-            self.close_connection = False
-
-        self.host = self.headers.get('Host', None)
-
-        # 处理 path 携带 host 的情况，例如 GET http://www.163.com/ HTTP/1.1
-        self.urlparse = urlparse.urlparse(self.path)
-        if self.urlparse.hostname:
-            self.host = self.urlparse.hostname
-            self.path = '%s?%s' % (self.urlparse.path, self.urlparse.query)
-        if self.urlparse.scheme:
-            self.scheme = self.urlparse.scheme
-
-
-        # TODO 未处理 post 存在请求实体的情况。
-
-        return True
 
     def send_error(self, code, message=None):
         self.close_connection = True
@@ -118,10 +123,10 @@ class HttpHandler(HandlerBase):
                    {'code': code, 'message': _quote_html(message), 'short': short})
 
         if self.request_version != "HTTP/0.9":
-            self.sock.write('%s %s %s\r\n' % (self.request_version, code, short))
-            self.sock.write('Content-Type:text/html; charset=UTF-8\r\n')
-            self.sock.write('Connection: close\r\n\r\n')
-        self.sock.write(content.encode('utf-8'))
+            self.sock.sendall('%s %s %s\r\n' % (self.request_version, code, short))
+            self.sock.sendall('Content-Type:text/html; charset=UTF-8\r\n')
+            self.sock.sendall('Connection: close\r\n\r\n')
+        self.sock.sendall(content.encode('utf-8'))
 
     @staticmethod
     def create(sock,server):
