@@ -4,6 +4,8 @@ TcpRoute, TCP 层的路由器。对于 TCP 连接自动从多个线路(允许任
 
 通过 socks5 代理服务器提供服务。目前支持直连及 socks5 代理线路。
 
+正在使用 go 重写，地址：https://github.com/GameXG/TcpRoute2/
+
 
 ## windows 安装
 
